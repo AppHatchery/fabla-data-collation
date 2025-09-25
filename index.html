@@ -18,7 +18,7 @@
             color: #1a1a1a;
             background: #ffffff;
             min-height: 100vh;
-            cursor: url('fabla-ghost.png') 16 16, auto;
+            cursor: url('fabla-ghost-cursor.png') 32 32, auto;
         }
 
         .container {
@@ -190,6 +190,28 @@
 
         .privacy-notice p {
             color: #075985;
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+
+        .data-notice {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+            text-align: center;
+        }
+
+        .data-notice h4 {
+            color: #92400e;
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .data-notice p {
+            color: #92400e;
             font-size: 0.875rem;
             line-height: 1.5;
         }
@@ -584,6 +606,11 @@
             <div class="privacy-notice">
                 <h4>🔒 Privacy & Security</h4>
                 <p>All data processing happens locally in your browser. No data is sent to external servers, ensuring complete privacy and compliance with research data protection requirements.</p>
+            </div>
+
+            <div class="data-notice">
+                <h4>📋 Important: File Type Requirements</h4>
+                <p>This tool is designed to work with <strong>raw data files</strong> that contain individual response records. It will not work properly with 30 day participation summary files. Please ensure you're uploading the raw CSV files containing the actual response data.</p>
             </div>
 
             <div class="main-card">
