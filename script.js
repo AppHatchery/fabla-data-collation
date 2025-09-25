@@ -3,6 +3,12 @@ class CSVCollator {
     constructor() {
         this.files = [];
         this.mergedData = [];
+        this.participationAnalyzer = new ParticipationAnalyzer();
+        this.participationData = null;
+        
+        // Analysis-specific properties
+        this.analysisFiles = [];
+        this.analysisParticipationData = null;
         this.init();
     }
 
@@ -15,7 +21,28 @@ class CSVCollator {
         const fileInput = document.getElementById('fileInput');
         const downloadCsvBtn = document.getElementById('downloadCsv');
         const downloadExcelBtn = document.getElementById('downloadExcel');
+        const analyzeParticipationBtn = document.getElementById('analyzeParticipation');
+        const downloadParticipationCsvBtn = document.getElementById('downloadParticipationCsv');
+        const backToResultsBtn = document.getElementById('backToResults');
+        const participantSelect = document.getElementById('participantSelect');
         const resetBtn = document.getElementById('resetBtn');
+        
+        // Tool selector elements
+        const aggregationTab = document.getElementById('aggregationTab');
+        const analysisTab = document.getElementById('analysisTab');
+        const aggregationCard = document.getElementById('aggregationCard');
+        const analysisCard = document.getElementById('analysisCard');
+        
+        // Analysis-specific elements
+        const analysisFileInput = document.getElementById('analysisFileInput');
+        const analysisUploadArea = document.getElementById('analysisUploadArea');
+        const analysisFileList = document.getElementById('analysisFileList');
+        const analysisLoading = document.getElementById('analysisLoading');
+        const analysisMessages = document.getElementById('analysisMessages');
+        const analysisResults = document.getElementById('analysisResults');
+        const analysisParticipantSelect = document.getElementById('analysisParticipantSelect');
+        const downloadAnalysisCsv = document.getElementById('downloadAnalysisCsv');
+        const resetAnalysisBtn = document.getElementById('resetAnalysisBtn');
 
         // File upload events
         uploadArea.addEventListener('click', () => fileInput.click());
@@ -27,7 +54,25 @@ class CSVCollator {
         // Button events
         downloadCsvBtn.addEventListener('click', this.downloadCSV.bind(this));
         downloadExcelBtn.addEventListener('click', this.downloadExcel.bind(this));
+        analyzeParticipationBtn.addEventListener('click', this.analyzeParticipation.bind(this));
+        downloadParticipationCsvBtn.addEventListener('click', this.downloadParticipationCSV.bind(this));
+        backToResultsBtn.addEventListener('click', this.backToResults.bind(this));
+        participantSelect.addEventListener('change', this.filterChartByParticipant.bind(this));
         resetBtn.addEventListener('click', this.reset.bind(this));
+        
+        // Tool selector events
+        aggregationTab.addEventListener('click', () => this.switchTool('aggregation'));
+        analysisTab.addEventListener('click', () => this.switchTool('analysis'));
+        
+        // Analysis-specific events
+        analysisUploadArea.addEventListener('click', () => analysisFileInput.click());
+        analysisUploadArea.addEventListener('dragover', this.handleDragOver.bind(this));
+        analysisUploadArea.addEventListener('dragleave', this.handleDragLeave.bind(this));
+        analysisUploadArea.addEventListener('drop', this.handleAnalysisDrop.bind(this));
+        analysisFileInput.addEventListener('change', this.handleAnalysisFileSelect.bind(this));
+        analysisParticipantSelect.addEventListener('change', this.filterAnalysisChartByParticipant.bind(this));
+        downloadAnalysisCsv.addEventListener('click', this.downloadAnalysisCSV.bind(this));
+        resetAnalysisBtn.addEventListener('click', this.resetAnalysis.bind(this));
     }
 
     handleDragOver(e) {
@@ -366,7 +411,7 @@ class CSVCollator {
             const previewData = this.mergedData.slice(0, maxRows);
             const columns = Object.keys(this.mergedData[0] || {});
 
-            let tableHTML = '<table><thead><tr>';
+            let tableHTML = '<div class="table-container"><div class="table-wrapper"><table><thead><tr>';
             columns.forEach(col => {
                 tableHTML += `<th>${this.escapeHtml(col)}</th>`;
             });
@@ -380,12 +425,16 @@ class CSVCollator {
                 tableHTML += '</tr>';
             });
 
-            tableHTML += '</tbody></table>';
+            tableHTML += '</tbody></table></div></div>';
             previewDiv.innerHTML = tableHTML;
         } else {
             previewDiv.innerHTML = '';
         }
 
+        // Show action buttons and results
+        const actionButtons = document.getElementById('actionButtons');
+        actionButtons.style.display = 'block';
+        
         resultsDiv.classList.add('show');
     }
 
@@ -509,10 +558,14 @@ class CSVCollator {
     reset() {
         this.files = [];
         this.mergedData = [];
+        this.participationData = null;
         
         document.getElementById('fileInput').value = '';
+        document.getElementById('actionButtons').style.display = 'none';
         document.getElementById('results').classList.remove('show');
+        document.getElementById('participationResults').style.display = 'none';
         document.getElementById('fileList').innerHTML = '';
+        document.getElementById('participantSelect').innerHTML = '<option value="all">All Participants</option>';
         this.clearMessages();
     }
 
@@ -520,6 +573,719 @@ class CSVCollator {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    // Participation Analysis Methods
+    analyzeParticipation() {
+        if (this.mergedData.length === 0) {
+            this.addMessage('No data available for analysis. Please process files first.', 'error');
+            return;
+        }
+
+        this.showLoading(true);
+        this.clearMessages();
+
+        try {
+            // Process the data for participation analysis
+            this.participationData = this.participationAnalyzer.processParticipationData(this.mergedData);
+            
+            if (this.participationData.summary === null) {
+                this.addMessage(this.participationData.message, 'error');
+                this.showLoading(false);
+                return;
+            }
+
+            // Generate statistics
+            const stats = this.participationAnalyzer.generateStats(this.participationData.summary);
+            
+            // Display the analysis results
+            this.showParticipationResults(stats, this.participationData.summary, this.participationData.audioSummary);
+            
+            this.addMessage('Participation analysis completed successfully!', 'success');
+            
+        } catch (error) {
+            this.addMessage(`Analysis error: ${error.message}`, 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    showParticipationResults(stats, summaryData, audioSummaryData) {
+        const resultsDiv = document.getElementById('results');
+        const participationDiv = document.getElementById('participationResults');
+        
+        // Hide main results, show participation results
+        resultsDiv.classList.remove('show');
+        participationDiv.style.display = 'block';
+        
+        // Show participation statistics
+        this.showParticipationStats(stats);
+        
+        // Show action buttons
+        const participationActionButtons = document.getElementById('participationActionButtons');
+        participationActionButtons.style.display = 'block';
+        
+        // Populate participant filter
+        this.populateParticipantFilter(summaryData);
+        
+        // Show chart
+        this.showParticipationChart(summaryData);
+        
+        // Show table
+        this.showParticipationTable(summaryData, audioSummaryData);
+    }
+
+    showParticipationStats(stats) {
+        const statsDiv = document.getElementById('participationStats');
+        
+        statsDiv.innerHTML = `
+            <div class="participation-stat-card">
+                <div class="participation-stat-number">${stats.totalParticipants}</div>
+                <div class="participation-stat-label">Total Participants</div>
+            </div>
+            <div class="participation-stat-card">
+                <div class="participation-stat-number">${stats.totalEntries}</div>
+                <div class="participation-stat-label">Total Entries</div>
+            </div>
+            <div class="participation-stat-card">
+                <div class="participation-stat-number">${stats.avgEntriesPerParticipant}</div>
+                <div class="participation-stat-label">Avg Entries per Participant</div>
+            </div>
+            <div class="participation-stat-card">
+                <div class="participation-stat-number">${stats.avgDailyParticipation}</div>
+                <div class="participation-stat-label">Avg Daily Participation</div>
+            </div>
+            <div class="participation-stat-card">
+                <div class="participation-stat-number">${stats.mostActiveParticipant.id}</div>
+                <div class="participation-stat-label">Most Active Participant (${stats.mostActiveParticipant.entries} entries)</div>
+            </div>
+            <div class="participation-stat-card">
+                <div class="participation-stat-number">${stats.leastActiveParticipant.id}</div>
+                <div class="participation-stat-label">Least Active Participant (${stats.leastActiveParticipant.entries} entries)</div>
+            </div>
+        `;
+    }
+
+    showParticipationChart(summaryData) {
+        const chartData = this.participationAnalyzer.createChartData(summaryData);
+        const chartContainer = document.getElementById('chartContainer');
+        
+        if (!chartData || chartData.length === 0) {
+            chartContainer.innerHTML = '<p style="text-align: center; color: #64748b; padding: 40px;">No participation data available for chart.</p>';
+            return;
+        }
+
+        // Find max value for scaling
+        const maxEntries = Math.max(...chartData.map(d => d.entries));
+        
+        if (maxEntries === 0) {
+            chartContainer.innerHTML = '<p style="text-align: center; color: #64748b; padding: 40px;">No participation entries found in the data.</p>';
+            return;
+        }
+        
+        let chartHTML = '<div class="chart-bars">';
+        
+        chartData.forEach(dataPoint => {
+            const height = maxEntries > 0 ? Math.max((dataPoint.entries / maxEntries) * 200, 2) : 2; // Minimum 2px height
+            const displayValue = dataPoint.entries > 0 ? dataPoint.entries : '';
+            
+            chartHTML += `
+                <div class="chart-bar" style="height: ${height}px;" title="${dataPoint.formattedDate}: ${dataPoint.entries} entries">
+                    ${displayValue ? `<div class="chart-bar-value">${displayValue}</div>` : ''}
+                    <div class="chart-bar-label">
+                        <div class="chart-bar-day">${dataPoint.dayNumber}</div>
+                        <div class="chart-bar-month">${dataPoint.monthName}</div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        chartHTML += '</div>';
+        chartContainer.innerHTML = chartHTML;
+    }
+
+    showParticipationTable(summaryData, audioSummaryData) {
+        const tableDiv = document.getElementById('participationTable');
+        
+        if (!summaryData || summaryData.length === 0) {
+            tableDiv.innerHTML = '<p>No participation data available.</p>';
+            return;
+        }
+
+        // Get the actual date range from the data (extract dates from summary data columns)
+        const dateRange = Object.keys(summaryData[0] || {})
+            .filter(key => key !== 'ParticipantID' && key !== 'TotalEntries')
+            .sort()
+            .reverse();
+        
+        let tableHTML = '<table><thead><tr>';
+        tableHTML += '<th>Participant ID</th>';
+        tableHTML += '<th>Total Entries</th>';
+        
+        // Add date columns (show all dates from data in scrollable table)
+        dateRange.forEach(date => {
+            const formattedDate = new Date(date).toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric' 
+            });
+            tableHTML += `<th>${formattedDate}</th>`;
+        });
+        
+        tableHTML += '</tr></thead><tbody>';
+        
+        summaryData.forEach(participant => {
+            tableHTML += '<tr>';
+            tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
+            tableHTML += `<td class="total-entries">${participant.TotalEntries}</td>`;
+            
+            dateRange.forEach(date => {
+                const count = participant[date] || 0;
+                const className = count > 0 ? 'daily-count has-entries' : 'daily-count';
+                tableHTML += `<td class="${className}">${count}</td>`;
+            });
+            
+            tableHTML += '</tr>';
+        });
+        
+        tableHTML += '</tbody></table>';
+        
+        // Add audio summary if available
+        if (audioSummaryData && audioSummaryData.length > 0) {
+            tableHTML += '<h4 style="margin-top: 32px; margin-bottom: 16px;">Audio/TextAudio Entries</h4>';
+            tableHTML += '<table><thead><tr>';
+            tableHTML += '<th>Participant ID</th>';
+            tableHTML += '<th>Total Entries</th>';
+            
+            dateRange.forEach(date => {
+                const formattedDate = new Date(date).toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+                tableHTML += `<th>${formattedDate}</th>`;
+            });
+            
+            tableHTML += '</tr></thead><tbody>';
+            
+            audioSummaryData.forEach(participant => {
+                tableHTML += '<tr>';
+                tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
+                tableHTML += `<td class="total-entries">${participant.TotalTextAudio || 0}</td>`;
+                
+                dateRange.forEach(date => {
+                    const count = participant[date] || 0;
+                    const className = count > 0 ? 'daily-count has-entries' : 'daily-count';
+                    tableHTML += `<td class="${className}">${count}</td>`;
+                });
+                
+                tableHTML += '</tr>';
+            });
+            
+            tableHTML += '</tbody></table>';
+        }
+        
+        tableDiv.innerHTML = tableHTML;
+    }
+
+    downloadParticipationCSV() {
+        if (!this.participationData || !this.participationData.summary) {
+            this.addMessage('No participation data available for download.', 'error');
+            return;
+        }
+
+        const csvContent = this.participationAnalyzer.generateCSVContent(
+            this.participationData.summary, 
+            this.participationData.audioSummary
+        );
+        
+        const today = new Date().toISOString().split('T')[0];
+        this.downloadFile(csvContent, `fabla_participation_analysis_${today}.csv`, 'text/csv');
+    }
+
+    populateParticipantFilter(summaryData) {
+        const participantSelect = document.getElementById('participantSelect');
+        
+        // Clear existing options except "All Participants"
+        participantSelect.innerHTML = '<option value="all">All Participants</option>';
+        
+        // Add participant options
+        summaryData.forEach(participant => {
+            const option = document.createElement('option');
+            option.value = participant.ParticipantID;
+            option.textContent = `Participant ${participant.ParticipantID} (${participant.TotalEntries} entries)`;
+            participantSelect.appendChild(option);
+        });
+    }
+
+    filterChartByParticipant() {
+        const participantSelect = document.getElementById('participantSelect');
+        const selectedParticipant = participantSelect.value;
+        
+        if (!this.participationData || !this.participationData.summary) {
+            return;
+        }
+        
+        let chartData;
+        if (selectedParticipant === 'all') {
+            chartData = this.participationAnalyzer.createChartData(this.participationData.summary);
+        } else {
+            chartData = this.participationAnalyzer.createParticipantChartData(this.participationData.summary, selectedParticipant);
+        }
+        
+        if (chartData) {
+            this.updateChartDisplay(chartData);
+        }
+    }
+
+    updateChartDisplay(chartData) {
+        const chartContainer = document.getElementById('chartContainer');
+        
+        if (!chartData || chartData.length === 0) {
+            chartContainer.innerHTML = '<p style="text-align: center; color: #64748b; padding: 40px;">No chart data available.</p>';
+            return;
+        }
+
+        // Find max value for scaling
+        const maxEntries = Math.max(...chartData.map(d => d.entries));
+        
+        if (maxEntries === 0) {
+            chartContainer.innerHTML = '<p style="text-align: center; color: #64748b; padding: 40px;">No participation entries found in the data.</p>';
+            return;
+        }
+        
+        let chartHTML = '<div class="chart-bars">';
+        
+        chartData.forEach(dataPoint => {
+            const height = maxEntries > 0 ? Math.max((dataPoint.entries / maxEntries) * 200, 2) : 2; // Minimum 2px height
+            const displayValue = dataPoint.entries > 0 ? dataPoint.entries : '';
+            
+            chartHTML += `
+                <div class="chart-bar" style="height: ${height}px;" title="${dataPoint.formattedDate}: ${dataPoint.entries} entries">
+                    ${displayValue ? `<div class="chart-bar-value">${displayValue}</div>` : ''}
+                    <div class="chart-bar-label">
+                        <div class="chart-bar-day">${dataPoint.dayNumber}</div>
+                        <div class="chart-bar-month">${dataPoint.monthName}</div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        chartHTML += '</div>';
+        chartContainer.innerHTML = chartHTML;
+    }
+
+    backToResults() {
+        const resultsDiv = document.getElementById('results');
+        const participationDiv = document.getElementById('participationResults');
+        const participationActionButtons = document.getElementById('participationActionButtons');
+        
+        participationDiv.style.display = 'none';
+        participationActionButtons.style.display = 'none';
+        resultsDiv.classList.add('show');
+    }
+
+    // Tool switching functionality
+    switchTool(tool) {
+        const aggregationTab = document.getElementById('aggregationTab');
+        const analysisTab = document.getElementById('analysisTab');
+        const aggregationCard = document.getElementById('aggregationCard');
+        const analysisCard = document.getElementById('analysisCard');
+        
+        if (tool === 'aggregation') {
+            aggregationTab.classList.add('active');
+            analysisTab.classList.remove('active');
+            aggregationCard.style.display = 'block';
+            analysisCard.style.display = 'none';
+        } else if (tool === 'analysis') {
+            analysisTab.classList.add('active');
+            aggregationTab.classList.remove('active');
+            aggregationCard.style.display = 'none';
+            analysisCard.style.display = 'block';
+        }
+    }
+
+    // Analysis-specific methods
+    handleAnalysisDrop(e) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('dragover');
+        const files = Array.from(e.dataTransfer.files).filter(file => 
+            file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv')
+        );
+        this.processAnalysisFiles(files);
+    }
+
+    handleAnalysisFileSelect(e) {
+        const files = Array.from(e.target.files);
+        this.processAnalysisFiles(files);
+    }
+
+    async processAnalysisFiles(files) {
+        if (files.length === 0) return;
+
+        this.showAnalysisLoading(true);
+        this.clearAnalysisMessages();
+
+        try {
+            this.analysisFiles = [];
+            const allData = [];
+
+            for (const file of files) {
+                try {
+                    const data = await this.parseCSV(file);
+                    this.analysisFiles.push({ name: file.name, data: data, rows: data.length });
+                    allData.push(...data);
+                    this.addAnalysisMessage(`✅ Loaded ${file.name}: ${data.length} rows`, 'success');
+                } catch (error) {
+                    this.addAnalysisMessage(`❌ Failed to load ${file.name}: ${error.message}`, 'error');
+                }
+            }
+
+            if (allData.length > 0) {
+                this.processAnalysisData(allData);
+            } else {
+                this.addAnalysisMessage('No valid CSV files could be processed.', 'error');
+            }
+        } catch (error) {
+            this.addAnalysisMessage(`Processing error: ${error.message}`, 'error');
+        } finally {
+            this.showAnalysisLoading(false);
+            this.updateAnalysisFileList();
+        }
+    }
+
+    processAnalysisData(allData) {
+        try {
+            // Process the data for participation analysis
+            this.analysisParticipationData = this.participationAnalyzer.processParticipationData(allData);
+            
+            if (this.analysisParticipationData.summary === null) {
+                this.addAnalysisMessage(this.analysisParticipationData.message, 'error');
+                return;
+            }
+
+            // Generate statistics
+            const stats = this.participationAnalyzer.generateStats(this.analysisParticipationData.summary);
+            
+            // Display the analysis results
+            this.showAnalysisResults(stats, this.analysisParticipationData.summary, this.analysisParticipationData.audioSummary);
+            
+            this.addAnalysisMessage('📊 Participation analysis completed successfully!', 'success');
+            
+        } catch (error) {
+            this.addAnalysisMessage(`Analysis error: ${error.message}`, 'error');
+        }
+    }
+
+    showAnalysisResults(stats, summaryData, audioSummaryData) {
+        const analysisResults = document.getElementById('analysisResults');
+        analysisResults.style.display = 'block';
+        
+        // Show participation statistics
+        this.showAnalysisParticipationStats(stats);
+        
+        // Show action buttons
+        const analysisActionButtons = document.getElementById('analysisActionButtons');
+        analysisActionButtons.style.display = 'block';
+        
+        // Populate participant filter
+        this.populateAnalysisParticipantFilter(summaryData);
+        
+        // Show chart
+        this.showAnalysisParticipationChart(summaryData);
+        
+        // Show table
+        this.showAnalysisParticipationTable(summaryData, audioSummaryData);
+    }
+
+    showAnalysisParticipationStats(stats) {
+        const statsDiv = document.getElementById('analysisParticipationStats');
+        
+        statsDiv.innerHTML = `
+            <div class="participation-stat-card">
+                <div class="participation-stat-number">${stats.totalParticipants}</div>
+                <div class="participation-stat-label">Total Participants</div>
+            </div>
+            <div class="participation-stat-card">
+                <div class="participation-stat-number">${stats.totalEntries}</div>
+                <div class="participation-stat-label">Total Entries</div>
+            </div>
+            <div class="participation-stat-card">
+                <div class="participation-stat-number">${stats.avgEntriesPerParticipant}</div>
+                <div class="participation-stat-label">Avg Entries per Participant</div>
+            </div>
+            <div class="participation-stat-card">
+                <div class="participation-stat-number">${stats.avgDailyParticipation}</div>
+                <div class="participation-stat-label">Avg Daily Participation</div>
+            </div>
+            <div class="participation-stat-card">
+                <div class="participation-stat-number">${stats.mostActiveParticipant.id}</div>
+                <div class="participation-stat-label">Most Active (${stats.mostActiveParticipant.entries} entries)</div>
+            </div>
+            <div class="participation-stat-card">
+                <div class="participation-stat-number">${stats.leastActiveParticipant.id}</div>
+                <div class="participation-stat-label">Least Active (${stats.leastActiveParticipant.entries} entries)</div>
+            </div>
+        `;
+    }
+
+    populateAnalysisParticipantFilter(summaryData) {
+        const participantSelect = document.getElementById('analysisParticipantSelect');
+        
+        // Clear existing options except "All Participants"
+        participantSelect.innerHTML = '<option value="all">All Participants</option>';
+        
+        // Add participant options
+        summaryData.forEach(participant => {
+            const option = document.createElement('option');
+            option.value = participant.ParticipantID;
+            option.textContent = `Participant ${participant.ParticipantID} (${participant.TotalEntries} entries)`;
+            participantSelect.appendChild(option);
+        });
+    }
+
+    showAnalysisParticipationChart(summaryData) {
+        const chartData = this.participationAnalyzer.createChartData(summaryData);
+        const chartContainer = document.getElementById('analysisChartContainer');
+        
+        if (!chartData || chartData.length === 0) {
+            chartContainer.innerHTML = '<p style="text-align: center; color: #64748b; padding: 40px;">No participation data available for chart.</p>';
+            return;
+        }
+
+        // Find max value for scaling
+        const maxEntries = Math.max(...chartData.map(d => d.entries));
+        
+        if (maxEntries === 0) {
+            chartContainer.innerHTML = '<p style="text-align: center; color: #64748b; padding: 40px;">No participation entries found in the data.</p>';
+            return;
+        }
+        
+        let chartHTML = '<div class="chart-bars">';
+        
+        chartData.forEach(dataPoint => {
+            const height = maxEntries > 0 ? Math.max((dataPoint.entries / maxEntries) * 200, 2) : 2; // Minimum 2px height
+            const displayValue = dataPoint.entries > 0 ? dataPoint.entries : '';
+            
+            chartHTML += `
+                <div class="chart-bar" style="height: ${height}px;" title="${dataPoint.formattedDate}: ${dataPoint.entries} entries">
+                    ${displayValue ? `<div class="chart-bar-value">${displayValue}</div>` : ''}
+                    <div class="chart-bar-label">
+                        <div class="chart-bar-day">${dataPoint.dayNumber}</div>
+                        <div class="chart-bar-month">${dataPoint.monthName}</div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        chartHTML += '</div>';
+        chartContainer.innerHTML = chartHTML;
+    }
+
+    showAnalysisParticipationTable(summaryData, audioSummaryData) {
+        const tableDiv = document.getElementById('analysisParticipationTable');
+        
+        if (!summaryData || summaryData.length === 0) {
+            tableDiv.innerHTML = '<p>No participation data available.</p>';
+            return;
+        }
+
+        // Get the actual date range from the data (extract dates from summary data columns)
+        const dateRange = Object.keys(summaryData[0] || {})
+            .filter(key => key !== 'ParticipantID' && key !== 'TotalEntries')
+            .sort()
+            .reverse();
+        
+        let tableHTML = '<table><thead><tr>';
+        tableHTML += '<th>Participant ID</th>';
+        tableHTML += '<th>Total Entries</th>';
+        
+        // Add date columns (show all dates from data in scrollable table)
+        dateRange.forEach(date => {
+            const formattedDate = new Date(date).toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric' 
+            });
+            tableHTML += `<th>${formattedDate}</th>`;
+        });
+        
+        tableHTML += '</tr></thead><tbody>';
+        
+        summaryData.forEach(participant => {
+            tableHTML += '<tr>';
+            tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
+            tableHTML += `<td class="total-entries">${participant.TotalEntries}</td>`;
+            
+            dateRange.forEach(date => {
+                const count = participant[date] || 0;
+                const className = count > 0 ? 'daily-count has-entries' : 'daily-count';
+                tableHTML += `<td class="${className}">${count}</td>`;
+            });
+            
+            tableHTML += '</tr>';
+        });
+        
+        tableHTML += '</tbody></table>';
+        
+        // Add audio summary if available
+        if (audioSummaryData && audioSummaryData.length > 0) {
+            tableHTML += '<h4 style="margin-top: 32px; margin-bottom: 16px;">Audio/TextAudio Entries</h4>';
+            tableHTML += '<table><thead><tr>';
+            tableHTML += '<th>Participant ID</th>';
+            tableHTML += '<th>Total Entries</th>';
+            
+            dateRange.forEach(date => {
+                const formattedDate = new Date(date).toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+                tableHTML += `<th>${formattedDate}</th>`;
+            });
+            
+            tableHTML += '</tr></thead><tbody>';
+            
+            audioSummaryData.forEach(participant => {
+                tableHTML += '<tr>';
+                tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
+                tableHTML += `<td class="total-entries">${participant.TotalTextAudio || 0}</td>`;
+                
+                dateRange.forEach(date => {
+                    const count = participant[date] || 0;
+                    const className = count > 0 ? 'daily-count has-entries' : 'daily-count';
+                    tableHTML += `<td class="${className}">${count}</td>`;
+                });
+                
+                tableHTML += '</tr>';
+            });
+            
+            tableHTML += '</tbody></table>';
+        }
+        
+        tableDiv.innerHTML = tableHTML;
+    }
+
+    filterAnalysisChartByParticipant() {
+        const participantSelect = document.getElementById('analysisParticipantSelect');
+        const selectedParticipant = participantSelect.value;
+        
+        if (!this.analysisParticipationData || !this.analysisParticipationData.summary) {
+            return;
+        }
+        
+        let chartData;
+        if (selectedParticipant === 'all') {
+            chartData = this.participationAnalyzer.createChartData(this.analysisParticipationData.summary);
+        } else {
+            chartData = this.participationAnalyzer.createParticipantChartData(this.analysisParticipationData.summary, selectedParticipant);
+        }
+        
+        if (chartData) {
+            this.updateAnalysisChartDisplay(chartData);
+        }
+    }
+
+    updateAnalysisChartDisplay(chartData) {
+        const chartContainer = document.getElementById('analysisChartContainer');
+        
+        if (!chartData || chartData.length === 0) {
+            chartContainer.innerHTML = '<p style="text-align: center; color: #64748b; padding: 40px;">No chart data available.</p>';
+            return;
+        }
+
+        // Find max value for scaling
+        const maxEntries = Math.max(...chartData.map(d => d.entries));
+        
+        if (maxEntries === 0) {
+            chartContainer.innerHTML = '<p style="text-align: center; color: #64748b; padding: 40px;">No participation entries found in the data.</p>';
+            return;
+        }
+        
+        let chartHTML = '<div class="chart-bars">';
+        
+        chartData.forEach(dataPoint => {
+            const height = maxEntries > 0 ? Math.max((dataPoint.entries / maxEntries) * 200, 2) : 2; // Minimum 2px height
+            const displayValue = dataPoint.entries > 0 ? dataPoint.entries : '';
+            
+            chartHTML += `
+                <div class="chart-bar" style="height: ${height}px;" title="${dataPoint.formattedDate}: ${dataPoint.entries} entries">
+                    ${displayValue ? `<div class="chart-bar-value">${displayValue}</div>` : ''}
+                    <div class="chart-bar-label">
+                        <div class="chart-bar-day">${dataPoint.dayNumber}</div>
+                        <div class="chart-bar-month">${dataPoint.monthName}</div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        chartHTML += '</div>';
+        chartContainer.innerHTML = chartHTML;
+    }
+
+    downloadAnalysisCSV() {
+        if (!this.analysisParticipationData || !this.analysisParticipationData.summary) {
+            this.addAnalysisMessage('No participation data available for download.', 'error');
+            return;
+        }
+
+        const csvContent = this.participationAnalyzer.generateCSVContent(
+            this.analysisParticipationData.summary, 
+            this.analysisParticipationData.audioSummary
+        );
+        
+        const today = new Date().toISOString().split('T')[0];
+        this.downloadFile(csvContent, `fabla_participation_analysis_${today}.csv`, 'text/csv');
+    }
+
+    resetAnalysis() {
+        this.analysisFiles = [];
+        this.analysisParticipationData = null;
+        
+        document.getElementById('analysisFileInput').value = '';
+        document.getElementById('analysisActionButtons').style.display = 'none';
+        document.getElementById('analysisResults').style.display = 'none';
+        document.getElementById('analysisFileList').innerHTML = '';
+        document.getElementById('analysisParticipantSelect').innerHTML = '<option value="all">All Participants</option>';
+        this.clearAnalysisMessages();
+    }
+
+    // Analysis helper methods
+    showAnalysisLoading(show) {
+        const loadingDiv = document.getElementById('analysisLoading');
+        loadingDiv.classList.toggle('show', show);
+    }
+
+    addAnalysisMessage(message, type = 'info') {
+        const messagesDiv = document.getElementById('analysisMessages');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = type;
+        messageDiv.textContent = message;
+        messagesDiv.appendChild(messageDiv);
+    }
+
+    clearAnalysisMessages() {
+        const messagesDiv = document.getElementById('analysisMessages');
+        messagesDiv.innerHTML = '';
+    }
+
+    updateAnalysisFileList() {
+        const fileListDiv = document.getElementById('analysisFileList');
+        
+        if (!this.analysisFiles || this.analysisFiles.length === 0) {
+            fileListDiv.innerHTML = '';
+            return;
+        }
+
+        let html = '<h3>📁 Uploaded Files</h3>';
+        this.analysisFiles.forEach(file => {
+            html += `
+                <div class="file-item">
+                    <div class="file-info">
+                        <span class="file-icon">📄</span>
+                        <span><strong>${this.escapeHtml(file.name)}</strong> - ${file.rows} rows</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        fileListDiv.innerHTML = html;
     }
 }
 
