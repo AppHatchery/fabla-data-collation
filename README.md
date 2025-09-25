@@ -1,36 +1,37 @@
-# 📊 CSV Collation & Deduplication Tool
+# 📊 Fabla Data Collation Tool
 
-A browser-based tool for merging multiple CSV files and removing duplicates. No installation required - just open the webpage and start using it!
+A browser-based tool for aggregating Fabla research data. Upload multiple CSV files, merge them intelligently, and remove duplicates with precision - all powered by advanced parsing technology.
 
-## 🚀 Live Demo
+## 🚀 Live Tool
 
-**[Click here to use the tool](https://your-username.github.io/fabla-data-collation/)**
+**[Click here to use the tool](https://apphatchery.github.io/fabla-data-collation/)**
 
 ## ✨ Features
 
 - **📁 Multiple File Upload**: Drag & drop or browse to select multiple CSV files
-- **🔧 Flexible Deduplication**: Choose to deduplicate on ResponseID, custom columns, or all columns
+- **🔧 ResponseID Deduplication**: Automatically removes duplicates based on ResponseID (keeps first occurrence)
 - **👁️ Data Preview**: Preview your merged data before downloading
-- **💾 Multiple Export Formats**: Download as CSV or Excel
-- **🔒 Privacy-First**: All processing happens in your browser - no data sent to servers
+- **💾 Multiple Export Formats**: Download as CSV or Excel with automatic date stamping
+- **🔒 Privacy-First**: All processing happens locally in your browser - no data sent to external servers
 - **📱 Mobile-Friendly**: Responsive design works on all devices
+- **👻 Fabla Branding**: Authentic Fabla design with ghost cursor and professional styling
+- **🛠️ Advanced CSV Parsing**: Handles multiline fields and complex CSV structures
 
 ## 🎯 How to Use
 
-1. **Upload Files**: Drag and drop CSV files or click to browse
-2. **Configure Settings**: 
-   - Choose deduplication mode (ResponseID, custom columns, or all columns)
-   - Select which duplicate to keep (first or last occurrence)
-   - Set preview preferences
-3. **Process**: The tool automatically merges and deduplicates your data
-4. **Download**: Get your processed data as CSV or Excel file
+1. **Upload Files**: Drag and drop CSV files or click to browse. You can upload multiple files at once.
+2. **Review Settings**: The tool automatically uses ResponseID for deduplication and keeps the first occurrence of duplicates.
+3. **Process Data**: The tool processes your files and removes duplicates automatically.
+4. **Download Results**: Download your collated and deduplicated data as CSV or Excel format with automatic date stamping (e.g., `fabla_data_2024-09-24.csv`).
 
 ## 🛠️ Technical Details
 
 - **Pure JavaScript**: No server-side processing required
-- **CSV Parser**: Handles quoted fields, commas, and special characters
+- **Advanced CSV Parser**: Handles quoted fields, commas, multiline fields, and special characters
 - **Memory Efficient**: Processes files directly in the browser
 - **Cross-Browser Compatible**: Works in all modern browsers
+- **Fixed Deduplication Logic**: Always uses ResponseID for consistent results
+- **Automatic File Naming**: Downloads include current date for organization
 
 ## 📋 Supported File Formats
 
@@ -54,19 +55,25 @@ To deploy this tool to your own GitHub Pages site:
 
 ```
 fabla-data-collation/
-├── index.html          # Main HTML interface
-├── script.js           # JavaScript processing logic
+├── index.html          # Main HTML interface with Fabla branding
+├── script.js           # JavaScript processing logic with fixed CSV parser
+├── fabla-icon.png      # Fabla logo icon
+├── fabla-ghost.png     # Fabla ghost image (used as cursor)
 ├── fabla-data-collate.py  # Original Python CLI tool
 └── README.md           # This file
 ```
+
+## 🔒 Privacy & Security
+
+All data processing happens locally in your browser. No data is sent to external servers, ensuring complete privacy and compliance with research data protection requirements.
 
 ## 🎨 Customization
 
 The tool is easily customizable:
 
-- **Styling**: Modify CSS in `index.html`
+- **Styling**: Modify CSS in `index.html` (includes Fabla branding)
 - **Functionality**: Extend JavaScript in `script.js`
-- **Default Settings**: Change default values in the HTML form elements
+- **Deduplication**: Currently fixed to ResponseID (can be modified in code)
 
 ## 🔍 Browser Compatibility
 
