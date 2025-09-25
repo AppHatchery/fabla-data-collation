@@ -63,9 +63,46 @@ fabla-data-collation/
 └── README.md           # This file
 ```
 
+## 🐍 Python CLI Tool
+
+For users who prefer command-line processing or need to process large datasets, this repository also includes a Python CLI tool (`fabla-data-collate.py`) that provides the same functionality.
+
+### Installation & Usage
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/apphatchery/fabla-data-collation.git
+   cd fabla-data-collation
+   ```
+
+2. **Install Python dependencies**:
+   ```bash
+   pip install pandas
+   ```
+
+3. **Run the Python tool**:
+   ```bash
+   # Process all CSV files in a directory
+   python3 fabla-data-collate.py -i ./your_csv_folder -o merged_data.csv
+   
+   # Process specific files
+   python3 fabla-data-collate.py -i file1.csv file2.csv file3.csv -o merged_data.csv
+   
+   # Process recursively through subdirectories
+   python3 fabla-data-collate.py -i ./your_csv_folder --recursive -o merged_data.csv
+   ```
+
+### Python Tool Features
+
+- **Same deduplication logic**: Uses ResponseID and keeps first occurrence
+- **Batch processing**: Handle multiple files or entire directories
+- **Recursive processing**: Process subdirectories automatically
+- **Flexible input**: Accept files, directories, or glob patterns
+- **Memory efficient**: Processes large datasets without browser limitations
+
 ## 🔒 Privacy & Security
 
-All data processing happens locally in your browser. No data is sent to external servers, ensuring complete privacy and compliance with research data protection requirements.
+All data processing happens locally in your browser (web tool) or on your computer (Python tool). No data is sent to external servers, ensuring complete privacy and compliance with research data protection requirements.
 
 ## 🎨 Customization
 
