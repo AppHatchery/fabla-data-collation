@@ -431,6 +431,12 @@ class CSVCollator {
             previewDiv.innerHTML = '';
         }
 
+        // Hide upload area and settings, show success state
+        const uploadArea = document.getElementById('uploadArea');
+        const settingsSection = document.querySelector('.settings');
+        uploadArea.style.display = 'none';
+        settingsSection.style.display = 'none';
+        
         // Show action buttons and results
         const actionButtons = document.getElementById('actionButtons');
         actionButtons.style.display = 'block';
@@ -522,19 +528,29 @@ class CSVCollator {
             return;
         }
 
-        let html = '<h3>📁 Uploaded Files</h3>';
-        this.files.forEach(file => {
-            html += `
-                <div class="file-item">
-                    <div class="file-info">
-                        <span class="file-icon">📄</span>
-                        <span><strong>${this.escapeHtml(file.name)}</strong> - ${file.rows} rows</span>
-                    </div>
+        // Calculate total rows
+        const totalRows = this.files.reduce((sum, file) => sum + file.rows, 0);
+        
+        // Show collapsible summary instead of full file list
+        fileListDiv.innerHTML = `
+            <div class="file-summary collapsible" onclick="this.classList.toggle('expanded')">
+                <div class="file-summary-header">
+                    <span class="file-icon">📁</span>
+                    <span class="file-count">${this.files.length} file${this.files.length > 1 ? 's' : ''} processed</span>
+                    <span class="file-rows">(${totalRows.toLocaleString()} total rows)</span>
+                    <span class="chevron">▼</span>
                 </div>
-            `;
-        });
-
-        fileListDiv.innerHTML = html;
+                <div class="file-summary-details">
+                    ${this.files.map(file => `
+                        <div class="file-detail">
+                            <span class="file-icon">📄</span>
+                            <span class="file-name">${this.escapeHtml(file.name)}</span>
+                            <span class="file-rows">${file.rows} rows</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
     }
 
     showLoading(show) {
@@ -566,6 +582,13 @@ class CSVCollator {
         document.getElementById('participationResults').style.display = 'none';
         document.getElementById('fileList').innerHTML = '';
         document.getElementById('participantSelect').innerHTML = '<option value="all">All Participants</option>';
+        
+        // Show upload area and settings again
+        const uploadArea = document.getElementById('uploadArea');
+        const settingsSection = document.querySelector('.settings');
+        uploadArea.style.display = 'block';
+        settingsSection.style.display = 'block';
+        
         this.clearMessages();
     }
 
@@ -965,6 +988,10 @@ class CSVCollator {
             // Generate statistics
             const stats = this.participationAnalyzer.generateStats(this.analysisParticipationData.summary);
             
+            // Hide upload area and show success state
+            const analysisUploadArea = document.getElementById('analysisUploadArea');
+            analysisUploadArea.style.display = 'none';
+            
             // Display the analysis results
             this.showAnalysisResults(stats, this.analysisParticipationData.summary, this.analysisParticipationData.audioSummary);
             
@@ -1243,6 +1270,11 @@ class CSVCollator {
         document.getElementById('analysisResults').style.display = 'none';
         document.getElementById('analysisFileList').innerHTML = '';
         document.getElementById('analysisParticipantSelect').innerHTML = '<option value="all">All Participants</option>';
+        
+        // Show upload area again
+        const analysisUploadArea = document.getElementById('analysisUploadArea');
+        analysisUploadArea.style.display = 'block';
+        
         this.clearAnalysisMessages();
     }
 
@@ -1273,19 +1305,29 @@ class CSVCollator {
             return;
         }
 
-        let html = '<h3>📁 Uploaded Files</h3>';
-        this.analysisFiles.forEach(file => {
-            html += `
-                <div class="file-item">
-                    <div class="file-info">
-                        <span class="file-icon">📄</span>
-                        <span><strong>${this.escapeHtml(file.name)}</strong> - ${file.rows} rows</span>
-                    </div>
+        // Calculate total rows
+        const totalRows = this.analysisFiles.reduce((sum, file) => sum + file.rows, 0);
+        
+        // Show collapsible summary instead of full file list
+        fileListDiv.innerHTML = `
+            <div class="file-summary collapsible" onclick="this.classList.toggle('expanded')">
+                <div class="file-summary-header">
+                    <span class="file-icon">📁</span>
+                    <span class="file-count">${this.analysisFiles.length} file${this.analysisFiles.length > 1 ? 's' : ''} processed</span>
+                    <span class="file-rows">(${totalRows.toLocaleString()} total rows)</span>
+                    <span class="chevron">▼</span>
                 </div>
-            `;
-        });
-
-        fileListDiv.innerHTML = html;
+                <div class="file-summary-details">
+                    ${this.analysisFiles.map(file => `
+                        <div class="file-detail">
+                            <span class="file-icon">📄</span>
+                            <span class="file-name">${this.escapeHtml(file.name)}</span>
+                            <span class="file-rows">${file.rows} rows</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
     }
 }
 
