@@ -12,12 +12,22 @@ class ParticipationAnalyzer {
     // Helper function to parse date strings
     parseDate(dateStr) {
         if (!dateStr) return null;
+        // Extract date part directly from timestamp string (e.g., "2025-08-14T22:04:21.678396" -> "2025-08-14")
+        if (dateStr.includes('T')) {
+            return dateStr.split('T')[0];
+        }
+        // If no 'T' found, try to parse as date
         const date = new Date(dateStr);
-        return isNaN(date.getTime()) ? null : date;
+        return isNaN(date.getTime()) ? null : date.toISOString().split('T')[0];
     }
 
-    // Helper function to format date as YYYY-MM-DD
+    // Helper function to format date as YYYY-MM-DD (extract date directly from timestamp)
     formatDate(date) {
+        // If date is already a string (from parseDate), return it directly
+        if (typeof date === 'string') {
+            return date;
+        }
+        // Otherwise convert to ISO string and extract date part
         return date.toISOString().split('T')[0];
     }
 
