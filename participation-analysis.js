@@ -31,6 +31,21 @@ class ParticipationAnalyzer {
         return date.toISOString().split('T')[0];
     }
 
+    // Helper function to format date string (YYYY-MM-DD) without Date parsing
+    formatDateForChart(dateStr) {
+        // dateStr is in format 'YYYY-MM-DD' (e.g., '2025-08-14')
+        const [year, month, day] = dateStr.split('-');
+        
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        
+        return {
+            dayNumber: parseInt(day, 10),
+            monthName: monthNames[parseInt(month, 10) - 1],
+            formattedDate: `${monthNames[parseInt(month, 10) - 1]} ${parseInt(day, 10)}`
+        };
+    }
+
     // Helper function to get date range from actual data
     getDateRangeFromData(processedRows) {
         const uniqueDates = new Set();
@@ -327,16 +342,16 @@ class ParticipationAnalyzer {
         });
 
         // Convert to chart format
-        const chartData = dateRange.map(date => ({
-            date: date,
-            entries: dailyTotals[date],
-            formattedDate: new Date(date).toLocaleDateString('en-US', { 
-                day: 'numeric',
-                month: 'short'
-            }),
-            dayNumber: new Date(date).getDate(),
-            monthName: new Date(date).toLocaleDateString('en-US', { month: 'short' })
-        }));
+        const chartData = dateRange.map(date => {
+            const formatted = this.formatDateForChart(date);
+            return {
+                date: date,
+                entries: dailyTotals[date],
+                formattedDate: formatted.formattedDate,
+                dayNumber: formatted.dayNumber,
+                monthName: formatted.monthName
+            };
+        });
 
         return chartData;
     }
@@ -360,16 +375,16 @@ class ParticipationAnalyzer {
             .reverse();
 
         // Convert to chart format for this participant
-        const chartData = dateRange.map(date => ({
-            date: date,
-            entries: participant[date] || 0,
-            formattedDate: new Date(date).toLocaleDateString('en-US', { 
-                day: 'numeric',
-                month: 'short'
-            }),
-            dayNumber: new Date(date).getDate(),
-            monthName: new Date(date).toLocaleDateString('en-US', { month: 'short' })
-        }));
+        const chartData = dateRange.map(date => {
+            const formatted = this.formatDateForChart(date);
+            return {
+                date: date,
+                entries: participant[date] || 0,
+                formattedDate: formatted.formattedDate,
+                dayNumber: formatted.dayNumber,
+                monthName: formatted.monthName
+            };
+        });
 
         return chartData;
     }
