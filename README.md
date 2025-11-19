@@ -8,21 +8,44 @@ A browser-based tool for aggregating Fabla research data. Upload multiple CSV fi
 
 ## ✨ Features
 
+### Data Aggregation
 - **📁 Multiple File Upload**: Drag & drop or browse to select multiple CSV files
 - **🔧 ResponseID Deduplication**: Automatically removes duplicates based on ResponseID (keeps first occurrence)
 - **👁️ Data Preview**: Preview your merged data before downloading
 - **💾 Multiple Export Formats**: Download as CSV or Excel with automatic date stamping
+- **🛠️ Advanced CSV Parsing**: Handles multiline fields and complex CSV structures
+
+### Participation Analysis
+- **📊 Participation Dashboard**: Analyze participation patterns with detailed statistics
+- **📈 Interactive Charts**: Visualize daily participation over time with scrollable bar charts
+- **📋 Detailed Tables**: View participation data in scrollable tables with all dates
+- **🔍 Participant Filtering**: Filter charts and tables by specific participants or view all
+- **📊 Key Metrics**: Total participants, entries, averages, most/least active participants
+- **🎯 End Time Analysis**: Focuses on end_time entries for accurate participation tracking
+
+### General
 - **🔒 Privacy-First**: All processing happens locally in your browser - no data sent to external servers
 - **📱 Mobile-Friendly**: Responsive design works on all devices
 - **👻 Fabla Branding**: Authentic Fabla design with ghost cursor and professional styling
-- **🛠️ Advanced CSV Parsing**: Handles multiline fields and complex CSV structures
 
 ## 🎯 How to Use
+
+### Data Aggregation Tool
 
 1. **Upload Files**: Drag and drop CSV files or click to browse. You can upload multiple files at once.
 2. **Review Settings**: The tool automatically uses ResponseID for deduplication and keeps the first occurrence of duplicates.
 3. **Process Data**: The tool processes your files and removes duplicates automatically.
 4. **Download Results**: Download your collated and deduplicated data as CSV or Excel format with automatic date stamping (e.g., `fabla_data_2024-09-24.csv`).
+
+### Participation Analysis Tool
+
+1. **Upload CSV Files**: Upload one or more CSV files containing participation data with `end_time` entries.
+2. **View Analysis**: The tool automatically processes the data and displays:
+   - **Statistics**: Total participants, entries, averages, and most/least active participants
+   - **Daily Participation Chart**: Interactive bar chart showing participation over time
+   - **Participation Table**: Detailed table with daily counts for each participant
+3. **Filter by Participant**: Use the dropdown selector to filter both the chart and table by a specific participant or view all participants.
+4. **Download Results**: Download the participation summary as CSV for further analysis.
 
 ## 🛠️ Technical Details
 
@@ -32,6 +55,9 @@ A browser-based tool for aggregating Fabla research data. Upload multiple CSV fi
 - **Cross-Browser Compatible**: Works in all modern browsers
 - **Fixed Deduplication Logic**: Always uses ResponseID for consistent results
 - **Automatic File Naming**: Downloads include current date for organization
+- **Timezone-Safe Date Parsing**: Direct string parsing prevents date shift issues
+- **Dynamic Date Ranges**: Automatically detects and displays all dates present in the data
+- **Synchronized Filtering**: Participant filter applies to both charts and tables simultaneously
 
 ## 📋 Supported File Formats
 
@@ -55,12 +81,14 @@ To deploy this tool to your own GitHub Pages site:
 
 ```
 fabla-data-collation/
-├── index.html          # Main HTML interface with Fabla branding
-├── script.js           # JavaScript processing logic with fixed CSV parser
-├── fabla-icon.png      # Fabla logo icon
-├── fabla-ghost.png     # Fabla ghost image (used as cursor)
-├── fabla-data-collate.py  # Original Python CLI tool
-└── README.md           # This file
+├── index.html              # Main HTML interface with Fabla branding
+├── script.js               # JavaScript processing logic with CSV parser and participation analysis
+├── participation-analysis.js # Core participation analysis logic
+├── fabla-icon.png          # Fabla logo icon
+├── fabla-ghost.png         # Fabla ghost image (used as cursor)
+├── fabla-ghost-cursor.png  # Fabla ghost cursor image
+├── fabla-data-collate.py   # Original Python CLI tool
+└── README.md               # This file
 ```
 
 ## 🐍 Python CLI Tool
