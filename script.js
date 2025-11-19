@@ -16,6 +16,17 @@ class CSVCollator {
         this.setupEventListeners();
     }
 
+    // Helper function to format date string (YYYY-MM-DD) for table display without Date parsing
+    formatDateForTable(dateStr) {
+        // dateStr is in format 'YYYY-MM-DD' (e.g., '2025-08-14')
+        const [year, month, day] = dateStr.split('-');
+        
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        
+        return `${monthNames[parseInt(month, 10) - 1]} ${parseInt(day, 10)}`;
+    }
+
     setupEventListeners() {
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
@@ -747,10 +758,7 @@ class CSVCollator {
         
         // Add date columns (show all dates from data in scrollable table)
         dateRange.forEach(date => {
-            const formattedDate = new Date(date).toLocaleDateString('en-US', { 
-                month: 'short', 
-                day: 'numeric' 
-            });
+            const formattedDate = this.formatDateForTable(date);
             tableHTML += `<th>${formattedDate}</th>`;
         });
         
@@ -780,10 +788,7 @@ class CSVCollator {
             tableHTML += '<th>Total Entries</th>';
             
             dateRange.forEach(date => {
-                const formattedDate = new Date(date).toLocaleDateString('en-US', { 
-                    month: 'short', 
-                    day: 'numeric' 
-                });
+                const formattedDate = this.formatDateForTable(date);
                 tableHTML += `<th>${formattedDate}</th>`;
             });
             
@@ -1127,10 +1132,7 @@ class CSVCollator {
         
         // Add date columns (show all dates from data in scrollable table)
         dateRange.forEach(date => {
-            const formattedDate = new Date(date).toLocaleDateString('en-US', { 
-                month: 'short', 
-                day: 'numeric' 
-            });
+            const formattedDate = this.formatDateForTable(date);
             tableHTML += `<th>${formattedDate}</th>`;
         });
         
@@ -1160,10 +1162,7 @@ class CSVCollator {
             tableHTML += '<th>Total Entries</th>';
             
             dateRange.forEach(date => {
-                const formattedDate = new Date(date).toLocaleDateString('en-US', { 
-                    month: 'short', 
-                    day: 'numeric' 
-                });
+                const formattedDate = this.formatDateForTable(date);
                 tableHTML += `<th>${formattedDate}</th>`;
             });
             
