@@ -39,9 +39,16 @@ class ParticipationAnalyzer {
         const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
                           'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         
+        // Calculate day of week using UTC to avoid timezone issues
+        // Create date as UTC midnight to ensure consistent day of week
+        const date = new Date(Date.UTC(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10)));
+        const dayOfWeek = date.getUTCDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+        const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+        
         return {
             dayNumber: parseInt(day, 10),
             monthName: monthNames[parseInt(month, 10) - 1],
+            dayOfWeek: dayNames[dayOfWeek],
             formattedDate: `${monthNames[parseInt(month, 10) - 1]} ${parseInt(day, 10)}`
         };
     }

@@ -24,7 +24,15 @@ class CSVCollator {
         const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
                           'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         
-        return `${monthNames[parseInt(month, 10) - 1]} ${parseInt(day, 10)}`;
+        // Calculate day of week using UTC to avoid timezone issues
+        const date = new Date(Date.UTC(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10)));
+        const dayOfWeek = date.getUTCDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+        const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+        
+        return {
+            dayOfWeek: dayNames[dayOfWeek],
+            dateStr: `${monthNames[parseInt(month, 10) - 1]} ${parseInt(day, 10)}`
+        };
     }
 
     setupEventListeners() {
@@ -758,8 +766,8 @@ class CSVCollator {
         
         // Add date columns (show all dates from data in scrollable table)
         dateRange.forEach(date => {
-            const formattedDate = this.formatDateForTable(date);
-            tableHTML += `<th>${formattedDate}</th>`;
+            const formatted = this.formatDateForTable(date);
+            tableHTML += `<th><div class="table-day-of-week">${formatted.dayOfWeek}</div><div class="table-date">${formatted.dateStr}</div></th>`;
         });
         
         tableHTML += '</tr></thead><tbody>';
@@ -782,14 +790,14 @@ class CSVCollator {
         
         // Add audio summary if available
         if (audioSummaryData && audioSummaryData.length > 0) {
-            tableHTML += '<h4 style="margin-top: 32px; margin-bottom: 16px;">Audio/TextAudio Entries</h4>';
+            tableHTML += '<div style="margin-top: 24px; padding: 12px 16px; background: #f8fafc; border-top: 2px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;"><h4 style="margin: 0; font-size: 1rem; color: #1e293b;">Audio/TextAudio Entries</h4></div>';
             tableHTML += '<table><thead><tr>';
             tableHTML += '<th>Participant ID</th>';
             tableHTML += '<th>Total Entries</th>';
             
             dateRange.forEach(date => {
-                const formattedDate = this.formatDateForTable(date);
-                tableHTML += `<th>${formattedDate}</th>`;
+                const formatted = this.formatDateForTable(date);
+                tableHTML += `<th><div class="table-day-of-week">${formatted.dayOfWeek}</div><div class="table-date">${formatted.dateStr}</div></th>`;
             });
             
             tableHTML += '</tr></thead><tbody>';
@@ -1145,8 +1153,8 @@ class CSVCollator {
         
         // Add date columns (show all dates from data in scrollable table)
         dateRange.forEach(date => {
-            const formattedDate = this.formatDateForTable(date);
-            tableHTML += `<th>${formattedDate}</th>`;
+            const formatted = this.formatDateForTable(date);
+            tableHTML += `<th><div class="table-day-of-week">${formatted.dayOfWeek}</div><div class="table-date">${formatted.dateStr}</div></th>`;
         });
         
         tableHTML += '</tr></thead><tbody>';
@@ -1169,14 +1177,14 @@ class CSVCollator {
         
         // Add audio summary if available
         if (audioSummaryData && audioSummaryData.length > 0) {
-            tableHTML += '<h4 style="margin-top: 32px; margin-bottom: 16px;">Audio/TextAudio Entries</h4>';
+            tableHTML += '<div style="margin-top: 24px; padding: 12px 16px; background: #f8fafc; border-top: 2px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;"><h4 style="margin: 0; font-size: 1rem; color: #1e293b;">Audio/TextAudio Entries</h4></div>';
             tableHTML += '<table><thead><tr>';
             tableHTML += '<th>Participant ID</th>';
             tableHTML += '<th>Total Entries</th>';
             
             dateRange.forEach(date => {
-                const formattedDate = this.formatDateForTable(date);
-                tableHTML += `<th>${formattedDate}</th>`;
+                const formatted = this.formatDateForTable(date);
+                tableHTML += `<th><div class="table-day-of-week">${formatted.dayOfWeek}</div><div class="table-date">${formatted.dateStr}</div></th>`;
             });
             
             tableHTML += '</tr></thead><tbody>';
