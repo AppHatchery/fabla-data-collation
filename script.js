@@ -852,6 +852,7 @@ class CSVCollator {
             return;
         }
         
+        // Filter chart
         let chartData;
         if (selectedParticipant === 'all') {
             chartData = this.participationAnalyzer.createChartData(this.participationData.summary);
@@ -862,6 +863,18 @@ class CSVCollator {
         if (chartData) {
             this.updateChartDisplay(chartData);
         }
+        
+        // Filter table
+        let filteredSummary = this.participationData.summary;
+        let filteredAudioSummary = this.participationData.audioSummary;
+        
+        if (selectedParticipant !== 'all') {
+            filteredSummary = this.participationData.summary.filter(p => p.ParticipantID === selectedParticipant);
+            filteredAudioSummary = this.participationData.audioSummary ? 
+                this.participationData.audioSummary.filter(p => p.ParticipantID === selectedParticipant) : null;
+        }
+        
+        this.showParticipationTable(filteredSummary, filteredAudioSummary);
     }
 
     updateChartDisplay(chartData) {
@@ -1196,6 +1209,7 @@ class CSVCollator {
             return;
         }
         
+        // Filter chart
         let chartData;
         if (selectedParticipant === 'all') {
             chartData = this.participationAnalyzer.createChartData(this.analysisParticipationData.summary);
@@ -1206,6 +1220,18 @@ class CSVCollator {
         if (chartData) {
             this.updateAnalysisChartDisplay(chartData);
         }
+        
+        // Filter table
+        let filteredSummary = this.analysisParticipationData.summary;
+        let filteredAudioSummary = this.analysisParticipationData.audioSummary;
+        
+        if (selectedParticipant !== 'all') {
+            filteredSummary = this.analysisParticipationData.summary.filter(p => p.ParticipantID === selectedParticipant);
+            filteredAudioSummary = this.analysisParticipationData.audioSummary ? 
+                this.analysisParticipationData.audioSummary.filter(p => p.ParticipantID === selectedParticipant) : null;
+        }
+        
+        this.showAnalysisParticipationTable(filteredSummary, filteredAudioSummary);
     }
 
     updateAnalysisChartDisplay(chartData) {
