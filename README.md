@@ -22,6 +22,7 @@ A browser-based tool for aggregating Fabla research data. Upload multiple CSV fi
 - **🔍 Participant Filtering**: Filter charts and tables by specific participants or view all
 - **📊 Key Metrics**: Total participants, entries, averages, most/least active participants
 - **🎯 End Time Analysis**: Focuses on end_time entries for accurate participation tracking
+- **💰 Incentive Tracking**: Displays the most recent incentive value for each participant from Incentives entries
 
 ### General
 - **🔒 Privacy-First**: All processing happens locally in your browser - no data sent to external servers
@@ -43,7 +44,11 @@ A browser-based tool for aggregating Fabla research data. Upload multiple CSV fi
 2. **View Analysis**: The tool automatically processes the data and displays:
    - **Statistics**: Total participants, entries, averages, and most/least active participants
    - **Daily Participation Chart**: Interactive bar chart showing participation over time
-   - **Participation Table**: Detailed table with daily counts for each participant
+   - **Participation Table**: Detailed table with daily counts for each participant, including:
+     - **Participant ID**: Unique identifier for each participant
+     - **Total Entries**: Total number of participation entries
+     - **Incentive**: Most recent incentive value from Incentives entries (if available)
+     - **Daily Counts**: Participation counts for each date in the dataset
 3. **Filter by Participant**: Use the dropdown selector to filter both the chart and table by a specific participant or view all participants.
 4. **Download Results**: Download the participation summary as CSV for further analysis.
 

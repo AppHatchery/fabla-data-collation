@@ -117,6 +117,49 @@ class ParticipationAnalyzer {
             dailyCounts[pid][date] = (dailyCounts[pid][date] || 0) + 1;
         });
         
+        // Step 4.5: Find most recent incentive per participant from Incentives rows
+        const incentiveRows = csvData.filter(item => item.QuestionsType === 'Incentives');
+        const mostRecentIncentives = {};
+        
+        incentiveRows.forEach(row => {
+            const pid = row.ParticipantID;
+            
+            if (!row.Response) return; // Skip if no Response value
+            
+            // Get timestamp for comparison - try RespondedAt first, then Date, then Response
+            let timestamp = null;
+            if (row.RespondedAt) {
+                timestamp = row.RespondedAt;
+            } else if (row.Date) {
+                timestamp = row.Date;
+            } else if (row.Response && row.Response.includes('T')) {
+                // If Response is a timestamp, use it
+                timestamp = row.Response;
+            }
+            
+            // If we have a timestamp and either no existing incentive or this one is more recent
+            if (timestamp) {
+                if (!mostRecentIncentives[pid] || timestamp > mostRecentIncentives[pid].timestamp) {
+                    mostRecentIncentives[pid] = {
+                        value: row.Response, // Store original string value
+                        timestamp: timestamp
+                    };
+                }
+            } else if (!mostRecentIncentives[pid]) {
+                // If no timestamp available, store the first one we encounter
+                mostRecentIncentives[pid] = {
+                    value: row.Response,
+                    timestamp: '' // Empty timestamp means it can't be compared
+                };
+            }
+        });
+        
+        // Extract just the values for easier access
+        const maxIncentives = {};
+        Object.keys(mostRecentIncentives).forEach(pid => {
+            maxIncentives[pid] = mostRecentIncentives[pid].value;
+        });
+        
         // Step 5: Create date range from actual data
         const dateRange = this.getDateRangeFromData(processedRows);
         
@@ -127,7 +170,8 @@ class ParticipationAnalyzer {
         participantIds.forEach(pid => {
             const row = {
                 ParticipantID: pid,
-                TotalEntries: totalCounts[pid]
+                TotalEntries: totalCounts[pid],
+                Incentive: maxIncentives[pid] || null
             };
             
             // Add daily counts for each day in the actual date range

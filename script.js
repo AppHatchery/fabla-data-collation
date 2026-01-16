@@ -756,13 +756,14 @@ class CSVCollator {
 
         // Get the actual date range from the data (extract dates from summary data columns)
         const dateRange = Object.keys(summaryData[0] || {})
-            .filter(key => key !== 'ParticipantID' && key !== 'TotalEntries')
+            .filter(key => key !== 'ParticipantID' && key !== 'TotalEntries' && key !== 'Incentive')
             .sort()
             .reverse();
         
         let tableHTML = '<table><thead><tr>';
         tableHTML += '<th>Participant ID</th>';
         tableHTML += '<th>Total Entries</th>';
+        tableHTML += '<th>Incentive</th>';
         
         // Add date columns (show all dates from data in scrollable table)
         dateRange.forEach(date => {
@@ -776,6 +777,7 @@ class CSVCollator {
             tableHTML += '<tr>';
             tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
             tableHTML += `<td class="total-entries">${participant.TotalEntries}</td>`;
+            tableHTML += `<td class="total-entries">${participant.Incentive !== null && participant.Incentive !== undefined ? participant.Incentive : '-'}</td>`;
             
             dateRange.forEach(date => {
                 const count = participant[date] || 0;
@@ -1143,13 +1145,14 @@ class CSVCollator {
 
         // Get the actual date range from the data (extract dates from summary data columns)
         const dateRange = Object.keys(summaryData[0] || {})
-            .filter(key => key !== 'ParticipantID' && key !== 'TotalEntries')
+            .filter(key => key !== 'ParticipantID' && key !== 'TotalEntries' && key !== 'Incentive')
             .sort()
             .reverse();
         
         let tableHTML = '<table><thead><tr>';
         tableHTML += '<th>Participant ID</th>';
         tableHTML += '<th>Total Entries</th>';
+        tableHTML += '<th>Incentive</th>';
         
         // Add date columns (show all dates from data in scrollable table)
         dateRange.forEach(date => {
@@ -1163,6 +1166,7 @@ class CSVCollator {
             tableHTML += '<tr>';
             tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
             tableHTML += `<td class="total-entries">${participant.TotalEntries}</td>`;
+            tableHTML += `<td class="total-entries">${participant.Incentive !== null && participant.Incentive !== undefined ? participant.Incentive : '-'}</td>`;
             
             dateRange.forEach(date => {
                 const count = participant[date] || 0;
