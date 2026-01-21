@@ -286,8 +286,16 @@ class ParticipationAnalyzer {
         const dailyTotals = {};
         
         // Get the actual date range from the data (extract dates from summary data columns)
+        // Only include keys that match YYYY-MM-DD date format and exclude known non-date columns
         const dateRange = Object.keys(summaryData[0] || {})
-            .filter(key => key !== 'ParticipantID' && key !== 'TotalEntries')
+            .filter(key => {
+                // Exclude known non-date columns
+                if (key === 'ParticipantID' || key === 'TotalEntries' || key === 'Incentive') {
+                    return false;
+                }
+                // Only include keys that match YYYY-MM-DD date format
+                return /^\d{4}-\d{2}-\d{2}$/.test(key);
+            })
             .sort()
             .reverse();
         
@@ -333,8 +341,16 @@ class ParticipationAnalyzer {
         }
 
         // Get the actual date range from the data (extract dates from summary data columns)
+        // Only include keys that match YYYY-MM-DD date format and exclude known non-date columns
         const dateRange = Object.keys(summaryData[0] || {})
-            .filter(key => key !== 'ParticipantID' && key !== 'TotalEntries')
+            .filter(key => {
+                // Exclude known non-date columns
+                if (key === 'ParticipantID' || key === 'TotalEntries' || key === 'Incentive') {
+                    return false;
+                }
+                // Only include keys that match YYYY-MM-DD date format
+                return /^\d{4}-\d{2}-\d{2}$/.test(key);
+            })
             .sort()
             .reverse();
 
@@ -375,8 +391,16 @@ class ParticipationAnalyzer {
         }
 
         // Get the actual date range from the data (extract dates from summary data columns)
+        // Only include keys that match YYYY-MM-DD date format and exclude known non-date columns
         const dateRange = Object.keys(summaryData[0] || {})
-            .filter(key => key !== 'ParticipantID' && key !== 'TotalEntries')
+            .filter(key => {
+                // Exclude known non-date columns
+                if (key === 'ParticipantID' || key === 'TotalEntries' || key === 'Incentive') {
+                    return false;
+                }
+                // Only include keys that match YYYY-MM-DD date format
+                return /^\d{4}-\d{2}-\d{2}$/.test(key);
+            })
             .sort()
             .reverse();
 
@@ -420,8 +444,16 @@ class ParticipationAnalyzer {
         }
 
         // Get the actual date range from the data (extract dates from summary data columns)
+        // Only include keys that match YYYY-MM-DD date format and exclude known non-date columns
         const dateRange = Object.keys(summaryData[0] || {})
-            .filter(key => key !== 'ParticipantID' && key !== 'TotalEntries')
+            .filter(key => {
+                // Exclude known non-date columns
+                if (key === 'ParticipantID' || key === 'TotalEntries' || key === 'Incentive') {
+                    return false;
+                }
+                // Only include keys that match YYYY-MM-DD date format
+                return /^\d{4}-\d{2}-\d{2}$/.test(key);
+            })
             .sort()
             .reverse();
 
