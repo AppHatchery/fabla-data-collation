@@ -20,6 +20,7 @@ A browser-based tool for aggregating Fabla research data. Upload multiple CSV fi
 - **📈 Interactive Charts**: Visualize daily participation over time with scrollable bar charts
 - **📋 Detailed Tables**: View participation data in scrollable tables with all dates
 - **🔍 Participant Filtering**: Filter charts and tables by specific participants or view all
+- **📅 Date Range Filtering**: Filter data by time periods (last 7 days, 15 days, 1-3 months, or all)
 - **📊 Key Metrics**: Total participants, entries, averages, most/least active participants
 - **🎯 End Time Analysis**: Focuses on end_time entries for accurate participation tracking
 - **💰 Incentive Tracking**: Displays the most recent incentive value for each participant from Incentives entries
@@ -49,8 +50,16 @@ A browser-based tool for aggregating Fabla research data. Upload multiple CSV fi
      - **Total Entries**: Total number of participation entries
      - **Incentive**: Most recent incentive value from Incentives entries (if available)
      - **Daily Counts**: Participation counts for each date in the dataset
-3. **Filter by Participant**: Use the dropdown selector to filter both the chart and table by a specific participant or view all participants.
-4. **Download Results**: Download the participation summary as CSV for further analysis.
+3. **Filter by Date Range**: Use the "Filter by Date" dropdown below the chart to view data for specific time periods:
+   - **All**: Shows all available dates
+   - **Last 7 days**: Shows only the most recent week
+   - **Last 15 days**: Shows the last two weeks
+   - **1 month**: Shows the last 30 days
+   - **2 months**: Shows the last 60 days
+   - **3 months**: Shows the last 90 days
+   - Participants with no data in the selected range are automatically hidden
+4. **Filter by Participant**: Use the dropdown selector to filter both the chart and table by a specific participant or view all participants. Date and participant filters work together.
+5. **Download Results**: Download the participation summary as CSV for further analysis.
 
 ## 🛠️ Technical Details
 
@@ -62,7 +71,8 @@ A browser-based tool for aggregating Fabla research data. Upload multiple CSV fi
 - **Automatic File Naming**: Downloads include current date for organization
 - **Timezone-Safe Date Parsing**: Direct string parsing prevents date shift issues
 - **Dynamic Date Ranges**: Automatically detects and displays all dates present in the data
-- **Synchronized Filtering**: Participant filter applies to both charts and tables simultaneously
+- **Synchronized Filtering**: Participant and date filters apply to both charts and tables simultaneously
+- **Smart Participant Filtering**: Automatically hides participants with no data in the selected date range
 
 ## 📋 Supported File Formats
 

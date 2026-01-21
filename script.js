@@ -5,10 +5,14 @@ class CSVCollator {
         this.mergedData = [];
         this.participationAnalyzer = new ParticipationAnalyzer();
         this.participationData = null;
+        this.originalSummaryData = null; // Store original data for filtering
+        this.originalAudioSummaryData = null; // Store original audio data for filtering
         
         // Analysis-specific properties
         this.analysisFiles = [];
         this.analysisParticipationData = null;
+        this.originalAnalysisSummaryData = null; // Store original analysis data for filtering
+        this.originalAnalysisAudioSummaryData = null;
         this.init();
     }
 
@@ -78,6 +82,13 @@ class CSVCollator {
         backToResultsBtn.addEventListener('click', this.backToResults.bind(this));
         participantSelect.addEventListener('change', this.filterChartByParticipant.bind(this));
         resetBtn.addEventListener('click', this.reset.bind(this));
+        
+        // Date filter event - use event delegation since there may be multiple date filters
+        document.addEventListener('change', (e) => {
+            if (e.target && e.target.id === 'dateFilter') {
+                this.filterByDateRange(e);
+            }
+        });
         
         // Tool selector events
         aggregationTab.addEventListener('click', () => this.switchTool('aggregation'));
@@ -594,6 +605,8 @@ class CSVCollator {
         this.files = [];
         this.mergedData = [];
         this.participationData = null;
+        this.originalSummaryData = null;
+        this.originalAudioSummaryData = null;
         
         document.getElementById('fileInput').value = '';
         document.getElementById('actionButtons').style.display = 'none';
@@ -601,6 +614,12 @@ class CSVCollator {
         document.getElementById('participationResults').style.display = 'none';
         document.getElementById('fileList').innerHTML = '';
         document.getElementById('participantSelect').innerHTML = '<option value="all">All Participants</option>';
+        
+        // Reset date filter
+        const dateFilter = document.getElementById('dateFilter');
+        if (dateFilter) {
+            dateFilter.value = 'all';
+        }
         
         // Show upload area and settings again
         const uploadArea = document.getElementById('uploadArea');
@@ -666,6 +685,10 @@ class CSVCollator {
         // Show action buttons
         const participationActionButtons = document.getElementById('participationActionButtons');
         participationActionButtons.style.display = 'block';
+        
+        // Store original data for filtering
+        this.originalSummaryData = JSON.parse(JSON.stringify(summaryData)); // Deep copy
+        this.originalAudioSummaryData = audioSummaryData ? JSON.parse(JSON.stringify(audioSummaryData)) : null;
         
         // Populate participant filter
         this.populateParticipantFilter(summaryData);
@@ -746,6 +769,179 @@ class CSVCollator {
         chartContainer.innerHTML = chartHTML;
     }
 
+    // Get filtered date range based on selection
+    getFilteredDateRange(allDates, days) {
+        if (days === 'all') {
+            return allDates;
+        }
+        
+        const numDays = parseInt(days, 10);
+        if (isNaN(numDays) || numDays <= 0) {
+            return allDates;
+        }
+        
+        // Get the most recent date (first in sorted descending order)
+        if (allDates.length === 0) {
+            return [];
+        }
+        
+        const mostRecentDate = allDates[0]; // Already sorted descending
+        const [year, month, day] = mostRecentDate.split('-').map(Number);
+        const cutoffDate = new Date(Date.UTC(year, month - 1, day));
+        // Subtract (numDays - 1) to get exactly numDays including the most recent date
+        cutoffDate.setUTCDate(cutoffDate.getUTCDate() - (numDays - 1));
+        
+        // Filter dates that are within the range (inclusive of cutoff date)
+        return allDates.filter(dateStr => {
+            const [y, m, d] = dateStr.split('-').map(Number);
+            const date = new Date(Date.UTC(y, m - 1, d));
+            return date >= cutoffDate;
+        });
+    }
+
+    // Filter summary data by date range and remove participants with no data
+    filterDataByDateRange(summaryData, audioSummaryData, dateRange) {
+        // Filter summary data
+        const filteredSummary = summaryData.map(participant => {
+            const filtered = {
+                ParticipantID: participant.ParticipantID,
+                TotalEntries: participant.TotalEntries,
+                Incentive: participant.Incentive
+            };
+            
+            // Only include dates in the filtered range
+            dateRange.forEach(date => {
+                filtered[date] = participant[date] || 0;
+            });
+            
+            return filtered;
+        }).filter(participant => {
+            // Remove participants with no data in the filtered date range
+            return dateRange.some(date => (participant[date] || 0) > 0);
+        });
+        
+        // Filter audio summary data if available
+        let filteredAudio = null;
+        if (audioSummaryData && audioSummaryData.length > 0) {
+            filteredAudio = audioSummaryData.map(participant => {
+                const filtered = {
+                    ParticipantID: participant.ParticipantID,
+                    TotalTextAudio: participant.TotalTextAudio
+                };
+                
+                // Only include dates in the filtered range
+                dateRange.forEach(date => {
+                    filtered[date] = participant[date] || 0;
+                });
+                
+                return filtered;
+            }).filter(participant => {
+                // Remove participants with no data in the filtered date range
+                return dateRange.some(date => (participant[date] || 0) > 0);
+            });
+        }
+        
+        return { filteredSummary, filteredAudio };
+    }
+
+    // Apply date filter and update display
+    filterByDateRange(event) {
+        // Get the dateFilter from the event target or find it
+        const dateFilter = event && event.target ? event.target : document.getElementById('dateFilter');
+        const selectedDays = dateFilter && dateFilter.value ? dateFilter.value : 'all';
+        
+        // Check which section is active - main participation or analysis
+        const participationResults = document.getElementById('participationResults');
+        const analysisResults = document.getElementById('analysisResults');
+        
+        // Determine which section is active based on visibility
+        const isMainParticipation = participationResults && participationResults.style.display !== 'none';
+        const isAnalysis = analysisResults && analysisResults.style.display !== 'none';
+        
+        if (isMainParticipation && this.originalSummaryData && this.originalSummaryData.length > 0) {
+            // Main participation section
+            // Get all available dates from original data
+            const allDates = Object.keys(this.originalSummaryData[0] || {})
+                .filter(key => {
+                    if (key === 'ParticipantID' || key === 'TotalEntries' || key === 'Incentive') {
+                        return false;
+                    }
+                    return /^\d{4}-\d{2}-\d{2}$/.test(key);
+                })
+                .sort()
+                .reverse();
+            
+            // Get filtered date range
+            const filteredDateRange = this.getFilteredDateRange(allDates, selectedDays);
+            
+            // Filter the data
+            const { filteredSummary, filteredAudio } = this.filterDataByDateRange(
+                this.originalSummaryData,
+                this.originalAudioSummaryData,
+                filteredDateRange
+            );
+            
+            // Update participant filter dropdown
+            this.populateParticipantFilter(filteredSummary);
+            
+            // Get current participant selection
+            const participantSelect = document.getElementById('participantSelect');
+            const selectedParticipant = participantSelect ? participantSelect.value : 'all';
+            
+            // Update chart and table
+            if (selectedParticipant === 'all') {
+                this.showParticipationChart(filteredSummary);
+            } else {
+                const chartData = this.participationAnalyzer.createParticipantChartData(filteredSummary, selectedParticipant);
+                this.updateChartDisplay(chartData);
+            }
+            
+            this.showParticipationTable(filteredSummary, filteredAudio);
+        } else if (isAnalysis && this.originalAnalysisSummaryData && this.originalAnalysisSummaryData.length > 0) {
+            // Analysis section
+            const summaryData = this.originalAnalysisSummaryData;
+            
+            // Get all available dates from data
+            const allDates = Object.keys(summaryData[0] || {})
+                .filter(key => {
+                    if (key === 'ParticipantID' || key === 'TotalEntries' || key === 'Incentive') {
+                        return false;
+                    }
+                    return /^\d{4}-\d{2}-\d{2}$/.test(key);
+                })
+                .sort()
+                .reverse();
+            
+            // Get filtered date range
+            const filteredDateRange = this.getFilteredDateRange(allDates, selectedDays);
+            
+            // Filter the data
+            const { filteredSummary, filteredAudio } = this.filterDataByDateRange(
+                summaryData,
+                this.originalAnalysisAudioSummaryData,
+                filteredDateRange
+            );
+            
+            // Update participant filter dropdown
+            this.populateAnalysisParticipantFilter(filteredSummary);
+            
+            // Get current participant selection
+            const participantSelect = document.getElementById('analysisParticipantSelect');
+            const selectedParticipant = participantSelect ? participantSelect.value : 'all';
+            
+            // Update chart and table
+            if (selectedParticipant === 'all') {
+                const chartData = this.participationAnalyzer.createChartData(filteredSummary);
+                this.updateAnalysisChartDisplay(chartData);
+            } else {
+                const chartData = this.participationAnalyzer.createParticipantChartData(filteredSummary, selectedParticipant);
+                this.updateAnalysisChartDisplay(chartData);
+            }
+            
+            this.showAnalysisParticipationTable(filteredSummary, filteredAudio);
+        }
+    }
+
     showParticipationTable(summaryData, audioSummaryData) {
         const tableDiv = document.getElementById('participationTable');
         
@@ -755,8 +951,16 @@ class CSVCollator {
         }
 
         // Get the actual date range from the data (extract dates from summary data columns)
+        // Only include keys that match YYYY-MM-DD date format and exclude known non-date columns
         const dateRange = Object.keys(summaryData[0] || {})
-            .filter(key => key !== 'ParticipantID' && key !== 'TotalEntries' && key !== 'Incentive')
+            .filter(key => {
+                // Exclude known non-date columns
+                if (key === 'ParticipantID' || key === 'TotalEntries' || key === 'Incentive') {
+                    return false;
+                }
+                // Only include keys that match YYYY-MM-DD date format
+                return /^\d{4}-\d{2}-\d{2}$/.test(key);
+            })
             .sort()
             .reverse();
         
@@ -858,33 +1062,59 @@ class CSVCollator {
         const participantSelect = document.getElementById('participantSelect');
         const selectedParticipant = participantSelect.value;
         
-        if (!this.participationData || !this.participationData.summary) {
+        if (!this.originalSummaryData || this.originalSummaryData.length === 0) {
             return;
+        }
+        
+        // Get current date filter
+        const dateFilter = document.getElementById('dateFilter');
+        const selectedDays = dateFilter ? dateFilter.value : 'all';
+        
+        // Get all available dates from original data
+        const allDates = Object.keys(this.originalSummaryData[0] || {})
+            .filter(key => {
+                if (key === 'ParticipantID' || key === 'TotalEntries' || key === 'Incentive') {
+                    return false;
+                }
+                return /^\d{4}-\d{2}-\d{2}$/.test(key);
+            })
+            .sort()
+            .reverse();
+        
+        // Get filtered date range
+        const filteredDateRange = this.getFilteredDateRange(allDates, selectedDays);
+        
+        // Filter the data by date range
+        const { filteredSummary, filteredAudio } = this.filterDataByDateRange(
+            this.originalSummaryData,
+            this.originalAudioSummaryData,
+            filteredDateRange
+        );
+        
+        // Now apply participant filter on date-filtered data
+        let finalSummary = filteredSummary;
+        let finalAudio = filteredAudio;
+        
+        if (selectedParticipant !== 'all') {
+            finalSummary = filteredSummary.filter(p => p.ParticipantID === selectedParticipant);
+            finalAudio = filteredAudio ? 
+                filteredAudio.filter(p => p.ParticipantID === selectedParticipant) : null;
         }
         
         // Filter chart
         let chartData;
         if (selectedParticipant === 'all') {
-            chartData = this.participationAnalyzer.createChartData(this.participationData.summary);
+            chartData = this.participationAnalyzer.createChartData(finalSummary);
         } else {
-            chartData = this.participationAnalyzer.createParticipantChartData(this.participationData.summary, selectedParticipant);
+            chartData = this.participationAnalyzer.createParticipantChartData(finalSummary, selectedParticipant);
         }
         
         if (chartData) {
             this.updateChartDisplay(chartData);
         }
         
-        // Filter table
-        let filteredSummary = this.participationData.summary;
-        let filteredAudioSummary = this.participationData.audioSummary;
-        
-        if (selectedParticipant !== 'all') {
-            filteredSummary = this.participationData.summary.filter(p => p.ParticipantID === selectedParticipant);
-            filteredAudioSummary = this.participationData.audioSummary ? 
-                this.participationData.audioSummary.filter(p => p.ParticipantID === selectedParticipant) : null;
-        }
-        
-        this.showParticipationTable(filteredSummary, filteredAudioSummary);
+        // Show table with both filters applied
+        this.showParticipationTable(finalSummary, finalAudio);
     }
 
     updateChartDisplay(chartData) {
@@ -1033,6 +1263,10 @@ class CSVCollator {
     showAnalysisResults(stats, summaryData, audioSummaryData) {
         const analysisResults = document.getElementById('analysisResults');
         analysisResults.style.display = 'block';
+        
+        // Store original data for filtering
+        this.originalAnalysisSummaryData = JSON.parse(JSON.stringify(summaryData)); // Deep copy
+        this.originalAnalysisAudioSummaryData = audioSummaryData ? JSON.parse(JSON.stringify(audioSummaryData)) : null;
         
         // Show participation statistics
         this.showAnalysisParticipationStats(stats);
@@ -1301,12 +1535,22 @@ class CSVCollator {
     resetAnalysis() {
         this.analysisFiles = [];
         this.analysisParticipationData = null;
+        this.originalAnalysisSummaryData = null;
+        this.originalAnalysisAudioSummaryData = null;
         
         document.getElementById('analysisFileInput').value = '';
         document.getElementById('analysisActionButtons').style.display = 'none';
         document.getElementById('analysisResults').style.display = 'none';
         document.getElementById('analysisFileList').innerHTML = '';
         document.getElementById('analysisParticipantSelect').innerHTML = '<option value="all">All Participants</option>';
+        
+        // Reset date filter if it exists in analysis section
+        const dateFilters = document.querySelectorAll('#dateFilter');
+        dateFilters.forEach(filter => {
+            if (filter.closest('#analysisResults')) {
+                filter.value = 'all';
+            }
+        });
         
         // Show upload area again
         const analysisUploadArea = document.getElementById('analysisUploadArea');
