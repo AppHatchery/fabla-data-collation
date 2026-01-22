@@ -4,6 +4,7 @@ class CSVCollator {
         this.files = [];
         this.mergedData = [];
         this.participationAnalyzer = new ParticipationAnalyzer();
+        this.referenceTranscriptExtractor = new ReferenceTranscriptExtractor();
         this.participationData = null;
         this.originalSummaryData = null; // Store original data for filtering
         this.originalAudioSummaryData = null; // Store original audio data for filtering
@@ -44,6 +45,7 @@ class CSVCollator {
         const fileInput = document.getElementById('fileInput');
         const downloadCsvBtn = document.getElementById('downloadCsv');
         const downloadExcelBtn = document.getElementById('downloadExcel');
+        const downloadReferenceTranscriptBtn = document.getElementById('downloadReferenceTranscript');
         const analyzeParticipationBtn = document.getElementById('analyzeParticipation');
         const downloadParticipationCsvBtn = document.getElementById('downloadParticipationCsv');
         const backToResultsBtn = document.getElementById('backToResults');
@@ -77,6 +79,7 @@ class CSVCollator {
         // Button events
         downloadCsvBtn.addEventListener('click', this.downloadCSV.bind(this));
         downloadExcelBtn.addEventListener('click', this.downloadExcel.bind(this));
+        downloadReferenceTranscriptBtn.addEventListener('click', this.downloadReferenceTranscript.bind(this));
         analyzeParticipationBtn.addEventListener('click', this.analyzeParticipation.bind(this));
         downloadParticipationCsvBtn.addEventListener('click', this.downloadParticipationCSV.bind(this));
         backToResultsBtn.addEventListener('click', this.backToResults.bind(this));
@@ -513,6 +516,14 @@ class CSVCollator {
         } catch (error) {
             this.addMessage(`Excel export error: ${error.message}`, 'error');
         }
+    }
+
+    downloadReferenceTranscript() {
+        this.referenceTranscriptExtractor.extractAndDownload(
+            this.mergedData,
+            this.downloadFile.bind(this),
+            this.addMessage.bind(this)
+        );
     }
 
 

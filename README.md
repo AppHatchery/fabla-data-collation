@@ -13,6 +13,7 @@ A browser-based tool for aggregating Fabla research data. Upload multiple CSV fi
 - **🔧 ResponseID Deduplication**: Automatically removes duplicates based on ResponseID (keeps first occurrence)
 - **👁️ Data Preview**: Preview your merged data before downloading
 - **💾 Multiple Export Formats**: Download as CSV or Excel with automatic date stamping
+- **📝 Transcript Extraction**: Extract Date, Reference, and Transcript columns for rows with Reference data
 - **🛠️ Advanced CSV Parsing**: Handles multiline fields and complex CSV structures
 
 ### Participation Analysis
@@ -37,7 +38,9 @@ A browser-based tool for aggregating Fabla research data. Upload multiple CSV fi
 1. **Upload Files**: Drag and drop CSV files or click to browse. You can upload multiple files at once.
 2. **Review Settings**: The tool automatically uses ResponseID for deduplication and keeps the first occurrence of duplicates.
 3. **Process Data**: The tool processes your files and removes duplicates automatically.
-4. **Download Results**: Download your collated and deduplicated data as CSV or Excel format with automatic date stamping (e.g., `fabla_data_2024-09-24.csv`).
+4. **Download Results**: 
+   - **Download CSV/Excel**: Download your collated and deduplicated data as CSV or Excel format with automatic date stamping (e.g., `fabla_data_2024-09-24.csv`)
+   - **Download Transcripts**: Extract and download only the Date, Reference, and Transcript columns for rows that have Reference data. This creates a focused CSV file (e.g., `fabla_reference_transcript_2024-09-24.csv`) containing only relevant transcript entries.
 
 ### Participation Analysis Tool
 
@@ -73,6 +76,7 @@ A browser-based tool for aggregating Fabla research data. Upload multiple CSV fi
 - **Dynamic Date Ranges**: Automatically detects and displays all dates present in the data
 - **Synchronized Filtering**: Participant and date filters apply to both charts and tables simultaneously
 - **Smart Participant Filtering**: Automatically hides participants with no data in the selected date range
+- **Modular Architecture**: Extraction and analysis logic separated into reusable modules
 
 ## 📋 Supported File Formats
 
@@ -96,14 +100,15 @@ To deploy this tool to your own GitHub Pages site:
 
 ```
 fabla-data-collation/
-├── index.html              # Main HTML interface with Fabla branding
-├── script.js               # JavaScript processing logic with CSV parser and participation analysis
-├── participation-analysis.js # Core participation analysis logic
-├── fabla-icon.png          # Fabla logo icon
-├── fabla-ghost.png         # Fabla ghost image (used as cursor)
-├── fabla-ghost-cursor.png  # Fabla ghost cursor image
-├── fabla-data-collate.py   # Original Python CLI tool
-└── README.md               # This file
+├── index.html                      # Main HTML interface with Fabla branding
+├── script.js                       # JavaScript processing logic with CSV parser and participation analysis
+├── participation-analysis.js       # Core participation analysis logic
+├── reference-transcript-extractor.js # Reference and transcript extraction module
+├── fabla-icon.png                  # Fabla logo icon
+├── fabla-ghost.png                 # Fabla ghost image (used as cursor)
+├── fabla-ghost-cursor.png          # Fabla ghost cursor image
+├── fabla-data-collate.py           # Original Python CLI tool
+└── README.md                       # This file
 ```
 
 ## 🐍 Python CLI Tool
