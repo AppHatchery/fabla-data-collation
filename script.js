@@ -8,6 +8,8 @@ class CSVCollator {
         this.participationData = null;
         this.originalSummaryData = null; // Store original data for filtering
         this.originalAudioSummaryData = null; // Store original audio data for filtering
+        this.transcriptFiles = [];
+        this.transcriptData = [];
         
         // Analysis-specific properties
         this.analysisFiles = [];
@@ -45,7 +47,6 @@ class CSVCollator {
         const fileInput = document.getElementById('fileInput');
         const downloadCsvBtn = document.getElementById('downloadCsv');
         const downloadExcelBtn = document.getElementById('downloadExcel');
-        const downloadReferenceTranscriptBtn = document.getElementById('downloadReferenceTranscript');
         const analyzeParticipationBtn = document.getElementById('analyzeParticipation');
         const downloadParticipationCsvBtn = document.getElementById('downloadParticipationCsv');
         const backToResultsBtn = document.getElementById('backToResults');
@@ -55,8 +56,10 @@ class CSVCollator {
         // Tool selector elements
         const aggregationTab = document.getElementById('aggregationTab');
         const analysisTab = document.getElementById('analysisTab');
+        const transcriptTab = document.getElementById('transcriptTab');
         const aggregationCard = document.getElementById('aggregationCard');
         const analysisCard = document.getElementById('analysisCard');
+        const transcriptCard = document.getElementById('transcriptCard');
         
         // Analysis-specific elements
         const analysisFileInput = document.getElementById('analysisFileInput');
@@ -68,6 +71,16 @@ class CSVCollator {
         const analysisParticipantSelect = document.getElementById('analysisParticipantSelect');
         const downloadAnalysisCsv = document.getElementById('downloadAnalysisCsv');
         const resetAnalysisBtn = document.getElementById('resetAnalysisBtn');
+        
+        // Transcript-specific elements
+        const transcriptFileInput = document.getElementById('transcriptFileInput');
+        const transcriptUploadArea = document.getElementById('transcriptUploadArea');
+        const transcriptFileList = document.getElementById('transcriptFileList');
+        const transcriptLoading = document.getElementById('transcriptLoading');
+        const transcriptMessages = document.getElementById('transcriptMessages');
+        const transcriptActionButtons = document.getElementById('transcriptActionButtons');
+        const downloadTranscriptBtn = document.getElementById('downloadTranscriptBtn');
+        const resetTranscriptBtn = document.getElementById('resetTranscriptBtn');
 
         // File upload events
         uploadArea.addEventListener('click', () => fileInput.click());
@@ -79,7 +92,6 @@ class CSVCollator {
         // Button events
         downloadCsvBtn.addEventListener('click', this.downloadCSV.bind(this));
         downloadExcelBtn.addEventListener('click', this.downloadExcel.bind(this));
-        downloadReferenceTranscriptBtn.addEventListener('click', this.downloadReferenceTranscript.bind(this));
         analyzeParticipationBtn.addEventListener('click', this.analyzeParticipation.bind(this));
         downloadParticipationCsvBtn.addEventListener('click', this.downloadParticipationCSV.bind(this));
         backToResultsBtn.addEventListener('click', this.backToResults.bind(this));
@@ -96,6 +108,16 @@ class CSVCollator {
         // Tool selector events
         aggregationTab.addEventListener('click', () => this.switchTool('aggregation'));
         analysisTab.addEventListener('click', () => this.switchTool('analysis'));
+        transcriptTab.addEventListener('click', () => this.switchTool('transcript'));
+        
+        // Transcript-specific events
+        transcriptUploadArea.addEventListener('click', () => transcriptFileInput.click());
+        transcriptUploadArea.addEventListener('dragover', this.handleDragOver.bind(this));
+        transcriptUploadArea.addEventListener('dragleave', this.handleDragLeave.bind(this));
+        transcriptUploadArea.addEventListener('drop', (e) => this.handleTranscriptDrop(e));
+        transcriptFileInput.addEventListener('change', (e) => this.handleTranscriptFileSelect(e));
+        downloadTranscriptBtn.addEventListener('click', this.downloadTranscript.bind(this));
+        resetTranscriptBtn.addEventListener('click', this.resetTranscript.bind(this));
         
         // Analysis-specific events
         analysisUploadArea.addEventListener('click', () => analysisFileInput.click());
@@ -1179,19 +1201,30 @@ class CSVCollator {
     switchTool(tool) {
         const aggregationTab = document.getElementById('aggregationTab');
         const analysisTab = document.getElementById('analysisTab');
+        const transcriptTab = document.getElementById('transcriptTab');
         const aggregationCard = document.getElementById('aggregationCard');
         const analysisCard = document.getElementById('analysisCard');
+        const transcriptCard = document.getElementById('transcriptCard');
+        
+        // Remove active class from all tabs
+        aggregationTab.classList.remove('active');
+        analysisTab.classList.remove('active');
+        transcriptTab.classList.remove('active');
+        
+        // Hide all cards
+        aggregationCard.style.display = 'none';
+        analysisCard.style.display = 'none';
+        transcriptCard.style.display = 'none';
         
         if (tool === 'aggregation') {
             aggregationTab.classList.add('active');
-            analysisTab.classList.remove('active');
             aggregationCard.style.display = 'block';
-            analysisCard.style.display = 'none';
         } else if (tool === 'analysis') {
             analysisTab.classList.add('active');
-            aggregationTab.classList.remove('active');
-            aggregationCard.style.display = 'none';
             analysisCard.style.display = 'block';
+        } else if (tool === 'transcript') {
+            transcriptTab.classList.add('active');
+            transcriptCard.style.display = 'block';
         }
     }
 
@@ -1620,6 +1653,128 @@ class CSVCollator {
                 </div>
             </div>
         `;
+    }
+
+    // Transcript-specific methods
+    handleTranscriptDrop(e) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('dragover');
+        const files = Array.from(e.dataTransfer.files).filter(file => 
+            file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv')
+        );
+        this.processTranscriptFiles(files);
+    }
+
+    handleTranscriptFileSelect(e) {
+        const files = Array.from(e.target.files);
+        this.processTranscriptFiles(files);
+    }
+
+    async processTranscriptFiles(files) {
+        if (files.length === 0) return;
+
+        const transcriptLoading = document.getElementById('transcriptLoading');
+        const transcriptMessages = document.getElementById('transcriptMessages');
+        const transcriptActionButtons = document.getElementById('transcriptActionButtons');
+        const transcriptFileList = document.getElementById('transcriptFileList');
+
+        transcriptLoading.style.display = 'flex';
+        transcriptMessages.innerHTML = '';
+        transcriptActionButtons.style.display = 'none';
+
+        try {
+            this.transcriptFiles = [];
+            const allData = [];
+
+            for (const file of files) {
+                const text = await file.text();
+                const parsed = this.csvParser.parse(text);
+                allData.push(...parsed);
+                this.transcriptFiles.push({
+                    name: file.name,
+                    size: file.size,
+                    rows: parsed.length
+                });
+            }
+
+            // Store merged data for transcript extraction
+            this.transcriptData = allData;
+
+            // Update file list
+            this.updateTranscriptFileList();
+
+            // Show success message
+            this.addTranscriptMessage(`Successfully processed ${files.length} file(s) with ${allData.length} total rows.`, 'success');
+            
+            // Show action buttons
+            transcriptActionButtons.style.display = 'flex';
+        } catch (error) {
+            console.error('Error processing transcript files:', error);
+            this.addTranscriptMessage(`Error processing files: ${error.message}`, 'error');
+        } finally {
+            transcriptLoading.style.display = 'none';
+        }
+    }
+
+    updateTranscriptFileList() {
+        const fileListDiv = document.getElementById('transcriptFileList');
+        
+        if (!this.transcriptFiles || this.transcriptFiles.length === 0) {
+            fileListDiv.innerHTML = '';
+            return;
+        }
+
+        fileListDiv.innerHTML = `
+            <div class="file-list-header">
+                <h4>Uploaded Files (${this.transcriptFiles.length})</h4>
+            </div>
+            <div class="file-items">
+                ${this.transcriptFiles.map((file, index) => `
+                    <div class="file-item">
+                        <span class="file-icon">📄</span>
+                        <span class="file-name">${this.escapeHtml(file.name)}</span>
+                        <span class="file-size">${this.formatFileSize(file.size)}</span>
+                        <span class="file-rows">${file.rows} rows</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    downloadTranscript() {
+        if (!this.transcriptData || this.transcriptData.length === 0) {
+            this.addTranscriptMessage('No data available for extraction.', 'warning');
+            return;
+        }
+
+        this.referenceTranscriptExtractor.extractAndDownload(
+            this.transcriptData,
+            this.downloadFile.bind(this),
+            this.addTranscriptMessage.bind(this)
+        );
+    }
+
+    resetTranscript() {
+        this.transcriptFiles = [];
+        this.transcriptData = [];
+        
+        const transcriptFileInput = document.getElementById('transcriptFileInput');
+        const transcriptFileList = document.getElementById('transcriptFileList');
+        const transcriptMessages = document.getElementById('transcriptMessages');
+        const transcriptActionButtons = document.getElementById('transcriptActionButtons');
+        
+        transcriptFileInput.value = '';
+        transcriptFileList.innerHTML = '';
+        transcriptMessages.innerHTML = '';
+        transcriptActionButtons.style.display = 'none';
+    }
+
+    addTranscriptMessage(message, type = 'info') {
+        const messagesDiv = document.getElementById('transcriptMessages');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${type}`;
+        messageDiv.textContent = message;
+        messagesDiv.appendChild(messageDiv);
     }
 }
 

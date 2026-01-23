@@ -1156,6 +1156,13 @@
                             <div class="tool-description">Analyze participation patterns with interactive charts and detailed statistics. Visualize engagement over time.</div>
                         </div>
                     </button>
+                    <button class="tool-button" id="transcriptTab" data-tool="transcript">
+                        <div class="tool-icon">📝</div>
+                        <div class="tool-content">
+                            <div class="tool-title">Download Transcripts</div>
+                            <div class="tool-description">Extract Date, Reference, and Transcript columns from your data.</div>
+                        </div>
+                    </button>
                 </div>
             </div>
 
@@ -1233,7 +1240,6 @@
             <div class="action-buttons" id="actionButtons" style="display: none;">
                 <button class="btn" id="downloadCsv">📄 Download CSV</button>
                 <button class="btn btn-secondary" id="downloadExcel">📊 Download Excel</button>
-                <button class="btn btn-secondary" id="downloadReferenceTranscript">📝 Download Transcripts</button>
                 <button class="btn btn-secondary" id="analyzeParticipation">📊 Analyze Participation</button>
                 <button class="btn btn-secondary" id="resetBtn">🔄 Reset</button>
             </div>
@@ -1354,6 +1360,29 @@
                         <div class="scroll-indicator">← Scroll horizontally to see all available dates →</div>
                         <div class="participation-table" id="analysisParticipationTable"></div>
                     </div>
+                </div>
+            </div>
+
+            <div class="main-card" id="transcriptCard" style="display: none;">
+                <div class="upload-area" id="transcriptUploadArea">
+                    <div class="upload-icon">📝</div>
+                    <h3>Upload CSV for Transcript Extraction</h3>
+                    <p>Upload your CSV data to extract Date, Reference, and Transcript columns. Only rows with Reference data will be included.</p>
+                    <input type="file" id="transcriptFileInput" class="file-input" accept=".csv" multiple />
+                </div>
+
+                <div class="file-list" id="transcriptFileList"></div>
+
+                <div class="loading" id="transcriptLoading">
+                    <div class="spinner"></div>
+                    <p>Processing files...</p>
+                </div>
+
+                <div id="transcriptMessages"></div>
+
+                <div class="action-buttons" id="transcriptActionButtons" style="display: none;">
+                    <button class="btn" id="downloadTranscriptBtn">📝 Download Transcripts</button>
+                    <button class="btn btn-secondary" id="resetTranscriptBtn">🔄 Reset</button>
                 </div>
             </div>
         </div>
