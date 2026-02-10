@@ -853,9 +853,9 @@
 
         .tool-buttons {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(2, 1fr);
             gap: 20px;
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
         }
 
@@ -1056,6 +1056,73 @@
             background: #f8fafc;
         }
 
+        /* Duplicate Cleaning Styles */
+        .duplicate-groups-container {
+            margin-top: 24px;
+        }
+
+        .duplicate-groups-container h4 {
+            color: #1e293b;
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .duplicate-group {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+
+        .duplicate-group-header {
+            background: #f8fafc;
+            padding: 12px 16px;
+            font-weight: 600;
+            color: #1e293b;
+            font-size: 0.875rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .duplicate-group table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .duplicate-group th,
+        .duplicate-group td {
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.8125rem;
+            white-space: nowrap;
+        }
+
+        .duplicate-group th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .duplicate-row-kept {
+            background: #f0fdf4;
+        }
+
+        .duplicate-row-removed {
+            background: #fef2f2;
+            color: #991b1b;
+            opacity: 0.7;
+        }
+
+        .show-more-duplicates {
+            text-align: center;
+            padding: 16px;
+            color: #64748b;
+            font-size: 0.875rem;
+            font-style: italic;
+        }
+
         @media (max-width: 768px) {
             .simple-header {
                 padding: 16px 0;
@@ -1103,6 +1170,10 @@
             }
             
             .stats {
+                grid-template-columns: 1fr;
+            }
+            
+            .tool-buttons {
                 grid-template-columns: 1fr;
             }
         }
@@ -1161,6 +1232,13 @@
                         <div class="tool-content">
                             <div class="tool-title">Download Transcripts</div>
                             <div class="tool-description">Extract Date, Reference, and Transcript columns from your data.</div>
+                        </div>
+                    </button>
+                    <button class="tool-button" id="cleaningTab" data-tool="cleaning">
+                        <div class="tool-icon">🧹</div>
+                        <div class="tool-content">
+                            <div class="tool-title">Duplicate Cleaning</div>
+                            <div class="tool-description">Clean duplicates caused by data upload glitches. Automatically detects and removes duplicate entries, keeping the earliest one.</div>
                         </div>
                     </button>
                 </div>
@@ -1383,6 +1461,59 @@
                 <div class="action-buttons" id="transcriptActionButtons" style="display: none;">
                     <button class="btn" id="downloadTranscriptBtn">📝 Download Transcripts</button>
                     <button class="btn btn-secondary" id="resetTranscriptBtn">🔄 Reset</button>
+                </div>
+            </div>
+
+            <!-- Duplicate Cleaning Card -->
+            <div class="main-card" id="cleaningCard" style="display: none;">
+                <div class="aggregation-steps">
+                    <h3>How Duplicate Cleaning Works</h3>
+                    <div class="steps-grid">
+                        <div class="step-card">
+                            <div class="step-number">1</div>
+                            <div class="step-title">Upload File</div>
+                            <div class="step-description">Upload your CSV file containing data with potential duplicates from upload glitches.</div>
+                        </div>
+                        <div class="step-card">
+                            <div class="step-number">2</div>
+                            <div class="step-title">Automatic Detection</div>
+                            <div class="step-description">The tool automatically detects duplicate entries caused by data upload glitches and keeps the earliest entry.</div>
+                        </div>
+                        <div class="step-card">
+                            <div class="step-number">3</div>
+                            <div class="step-title">Review & Download</div>
+                            <div class="step-description">Review the detected duplicates with full row details, then download your cleaned data.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="upload-area" id="cleaningUploadArea">
+                    <div class="upload-icon">🧹</div>
+                    <h3>Upload CSV for Duplicate Cleaning</h3>
+                    <p>Upload your CSV file to automatically detect and remove duplicates caused by data upload glitches</p>
+                    <input type="file" id="cleaningFileInput" class="file-input" accept=".csv" />
+                </div>
+
+                <div class="file-list" id="cleaningFileList"></div>
+
+                <div class="loading" id="cleaningLoading">
+                    <div class="spinner"></div>
+                    <p>Detecting and removing duplicates...</p>
+                </div>
+
+                <div id="cleaningMessages"></div>
+
+                <div class="action-buttons" id="cleaningActionButtons" style="display: none;">
+                    <button class="btn" id="downloadCleanedCsv">📄 Download Cleaned CSV</button>
+                    <button class="btn btn-secondary" id="downloadCleanedExcel">📊 Download Cleaned Excel</button>
+                    <button class="btn btn-secondary" id="resetCleaningBtn">🔄 Reset</button>
+                </div>
+
+                <div class="results" id="cleaningResults" style="display: none;">
+                    <h3>🧹 Cleaning Results</h3>
+                    <div class="stats" id="cleaningStats"></div>
+                    <div id="cleaningDuplicatePreview"></div>
+                    <div class="preview" id="cleaningPreview"></div>
                 </div>
             </div>
         </div>

@@ -26,6 +26,14 @@ A browser-based tool for aggregating Fabla research data. Upload multiple CSV fi
 - **🎯 End Time Analysis**: Focuses on end_time entries for accurate participation tracking
 - **💰 Incentive Tracking**: Displays the most recent incentive value for each participant from Incentives entries
 
+### Duplicate Cleaning
+- **🧹 Upload Glitch Detection**: Automatically detects duplicate entries caused by data upload glitches
+- **🔑 Smart Identification**: Identifies duplicates by matching PromptID, ParticipantID, and RespondedAt columns
+- **📅 Earliest Entry Preserved**: Keeps the entry with the earliest upload timestamp (Date) for each duplicate group
+- **🔍 Full Row Preview**: Review detected duplicate groups with all columns displayed for validation
+- **⚡ Automatic Processing**: No configuration needed — upload a file and cleaning runs immediately
+- **💾 Export Options**: Download cleaned data as CSV or Excel
+
 ### General
 - **🔒 Privacy-First**: All processing happens locally in your browser - no data sent to external servers
 - **📱 Mobile-Friendly**: Responsive design works on all devices
@@ -63,6 +71,15 @@ A browser-based tool for aggregating Fabla research data. Upload multiple CSV fi
    - Participants with no data in the selected range are automatically hidden
 4. **Filter by Participant**: Use the dropdown selector to filter both the chart and table by a specific participant or view all participants. Date and participant filters work together.
 5. **Download Results**: Download the participation summary as CSV for further analysis.
+
+### Duplicate Cleaning Tool
+
+1. **Upload File**: Upload a CSV file containing data with potential duplicates from upload glitches.
+2. **Automatic Detection**: The tool automatically identifies duplicate entries where PromptID, ParticipantID, and RespondedAt all match but the Date (upload timestamp) differs.
+3. **Review Duplicates**: Review the detected duplicate groups with full row details — all columns are displayed so you can validate each removal.
+4. **Download Cleaned Data**: Download the cleaned dataset as CSV or Excel. The earliest upload timestamp is preserved for each duplicate group.
+
+> **Note**: The file must contain `PromptID`, `ParticipantID`, `RespondedAt`, and `Date` columns. Rows where any of these values are empty or missing are never flagged as duplicates.
 
 ## 🛠️ Technical Details
 

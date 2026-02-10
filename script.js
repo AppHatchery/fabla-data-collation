@@ -16,6 +16,11 @@ class CSVCollator {
         this.analysisParticipationData = null;
         this.originalAnalysisSummaryData = null; // Store original analysis data for filtering
         this.originalAnalysisAudioSummaryData = null;
+        
+        // Cleaning-specific properties
+        this.cleaningRawData = [];
+        this.cleanedData = [];
+        this.cleaningDuplicateGroups = [];
         this.init();
     }
 
@@ -110,6 +115,10 @@ class CSVCollator {
         analysisTab.addEventListener('click', () => this.switchTool('analysis'));
         transcriptTab.addEventListener('click', () => this.switchTool('transcript'));
         
+        // Cleaning tab
+        const cleaningTab = document.getElementById('cleaningTab');
+        cleaningTab.addEventListener('click', () => this.switchTool('cleaning'));
+        
         // Transcript-specific events
         transcriptUploadArea.addEventListener('click', () => transcriptFileInput.click());
         transcriptUploadArea.addEventListener('dragover', this.handleDragOver.bind(this));
@@ -128,6 +137,22 @@ class CSVCollator {
         analysisParticipantSelect.addEventListener('change', this.filterAnalysisChartByParticipant.bind(this));
         downloadAnalysisCsv.addEventListener('click', this.downloadAnalysisCSV.bind(this));
         resetAnalysisBtn.addEventListener('click', this.resetAnalysis.bind(this));
+        
+        // Cleaning-specific events
+        const cleaningUploadArea = document.getElementById('cleaningUploadArea');
+        const cleaningFileInput = document.getElementById('cleaningFileInput');
+        const downloadCleanedCsv = document.getElementById('downloadCleanedCsv');
+        const downloadCleanedExcel = document.getElementById('downloadCleanedExcel');
+        const resetCleaningBtn = document.getElementById('resetCleaningBtn');
+        
+        cleaningUploadArea.addEventListener('click', () => cleaningFileInput.click());
+        cleaningUploadArea.addEventListener('dragover', this.handleDragOver.bind(this));
+        cleaningUploadArea.addEventListener('dragleave', this.handleDragLeave.bind(this));
+        cleaningUploadArea.addEventListener('drop', (e) => this.handleCleaningDrop(e));
+        cleaningFileInput.addEventListener('change', (e) => this.handleCleaningFileSelect(e));
+        downloadCleanedCsv.addEventListener('click', () => this.downloadCleanedCSV());
+        downloadCleanedExcel.addEventListener('click', () => this.downloadCleanedExcel());
+        resetCleaningBtn.addEventListener('click', () => this.resetCleaning());
     }
 
     handleDragOver(e) {
@@ -1202,19 +1227,23 @@ class CSVCollator {
         const aggregationTab = document.getElementById('aggregationTab');
         const analysisTab = document.getElementById('analysisTab');
         const transcriptTab = document.getElementById('transcriptTab');
+        const cleaningTab = document.getElementById('cleaningTab');
         const aggregationCard = document.getElementById('aggregationCard');
         const analysisCard = document.getElementById('analysisCard');
         const transcriptCard = document.getElementById('transcriptCard');
+        const cleaningCard = document.getElementById('cleaningCard');
         
         // Remove active class from all tabs
         aggregationTab.classList.remove('active');
         analysisTab.classList.remove('active');
         transcriptTab.classList.remove('active');
+        cleaningTab.classList.remove('active');
         
         // Hide all cards
         aggregationCard.style.display = 'none';
         analysisCard.style.display = 'none';
         transcriptCard.style.display = 'none';
+        cleaningCard.style.display = 'none';
         
         if (tool === 'aggregation') {
             aggregationTab.classList.add('active');
@@ -1225,6 +1254,9 @@ class CSVCollator {
         } else if (tool === 'transcript') {
             transcriptTab.classList.add('active');
             transcriptCard.style.display = 'block';
+        } else if (tool === 'cleaning') {
+            cleaningTab.classList.add('active');
+            cleaningCard.style.display = 'block';
         }
     }
 
@@ -1650,6 +1682,349 @@ class CSVCollator {
                             <span class="file-rows">${file.rows} rows</span>
                         </div>
                     `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // ==========================================
+    // Duplicate Cleaning Methods
+    // ==========================================
+
+    handleCleaningDrop(e) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('dragover');
+        const files = Array.from(e.dataTransfer.files).filter(file => 
+            file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv')
+        );
+        if (files.length > 0) {
+            this.processCleaningFile(files[0]); // Only process the first file
+        }
+    }
+
+    handleCleaningFileSelect(e) {
+        const files = Array.from(e.target.files);
+        if (files.length > 0) {
+            this.processCleaningFile(files[0]);
+        }
+    }
+
+    async processCleaningFile(file) {
+        this.showCleaningLoading(true);
+        this.clearCleaningMessages();
+
+        try {
+            const data = await this.parseCSV(file);
+            this.cleaningRawData = data;
+            
+            if (data.length === 0) {
+                this.addCleaningMessage('The file contains no data rows.', 'error');
+                this.showCleaningLoading(false);
+                return;
+            }
+
+            const columns = Object.keys(data[0]);
+            this.addCleaningMessage(`✅ Loaded ${file.name}: ${data.length} rows, ${columns.length} columns`, 'success');
+            
+            // Update file list
+            this.updateCleaningFileList(file.name, data.length);
+
+            // Validate required columns exist
+            const requiredCols = ['PromptID', 'ParticipantID', 'RespondedAt', 'Date'];
+            const missingCols = requiredCols.filter(col => !columns.includes(col));
+            if (missingCols.length > 0) {
+                this.addCleaningMessage(`❌ Missing required columns: ${missingCols.join(', ')}. The file must contain PromptID, ParticipantID, RespondedAt, and Date columns.`, 'error');
+                this.showCleaningLoading(false);
+                return;
+            }
+
+            // Auto-run duplicate cleaning with fixed parameters
+            this.runDuplicateCleaning();
+
+        } catch (error) {
+            this.addCleaningMessage(`❌ Failed to load ${file.name}: ${error.message}`, 'error');
+            this.showCleaningLoading(false);
+        }
+    }
+
+    runDuplicateCleaning() {
+        if (this.cleaningRawData.length === 0) {
+            this.addCleaningMessage('No data loaded. Please upload a file first.', 'error');
+            return;
+        }
+
+        // Fixed columns for duplicate detection
+        const keyCols = ['PromptID', 'ParticipantID', 'RespondedAt'];
+        const dateCol = 'Date';
+
+        this.showCleaningLoading(true);
+
+        try {
+            const data = this.cleaningRawData;
+            const totalBefore = data.length;
+
+            // Helper to check if a value is empty/None/null
+            const isEmpty = (val) => {
+                if (val === undefined || val === null) return true;
+                const s = String(val).trim().toLowerCase();
+                return s === '' || s === 'none' || s === 'null' || s === 'undefined';
+            };
+
+            // Group rows by the composite key, but ONLY if all key column values
+            // are non-empty. Rows with any empty key value are never considered duplicates.
+            const groups = new Map();
+            const ungroupedIndices = new Set(); // rows that can't be grouped (empty key values)
+
+            data.forEach((row, index) => {
+                const keyValues = keyCols.map(col => row[col] || '');
+
+                // If any key value is empty/None, this row cannot be a duplicate
+                if (keyValues.some(v => isEmpty(v))) {
+                    ungroupedIndices.add(index);
+                    return;
+                }
+
+                const key = keyValues.join('|||');
+
+                if (!groups.has(key)) {
+                    groups.set(key, []);
+                }
+                groups.get(key).push({ row, index });
+            });
+
+            // Find duplicate groups (groups with more than one entry AND different Date values)
+            const duplicateGroups = [];
+            const removedIndices = new Set();
+
+            groups.forEach((entries, key) => {
+                if (entries.length > 1) {
+                    // Check that dates actually differ (true duplicates from failed uploads)
+                    const uniqueDates = new Set(entries.map(e => e.row[dateCol] || ''));
+                    if (uniqueDates.size <= 1) {
+                        // Same date too — these are exact duplicates, not upload-retry duplicates.
+                        // Still deduplicate them (keep first).
+                    }
+
+                    // Sort by datetime column (earliest first)
+                    entries.sort((a, b) => {
+                        const dateA = a.row[dateCol] || '';
+                        const dateB = b.row[dateCol] || '';
+                        return dateA.localeCompare(dateB);
+                    });
+
+                    // Keep the first (earliest), mark rest as removed
+                    const kept = entries[0];
+                    const removed = entries.slice(1);
+
+                    removed.forEach(r => removedIndices.add(r.index));
+
+                    duplicateGroups.push({
+                        key: key,
+                        kept: kept,
+                        removed: removed,
+                        all: entries
+                    });
+                }
+            });
+
+            // Build cleaned data - preserve original order, keep ungrouped rows and non-duplicates
+            this.cleanedData = data.filter((row, index) => !removedIndices.has(index));
+            this.cleaningDuplicateGroups = duplicateGroups;
+
+            const totalAfter = this.cleanedData.length;
+            const totalRemoved = totalBefore - totalAfter;
+
+            this.addCleaningMessage(
+                `🧹 Cleaning complete: Found ${duplicateGroups.length} duplicate group${duplicateGroups.length !== 1 ? 's' : ''}, removed ${totalRemoved} duplicate row${totalRemoved !== 1 ? 's' : ''}.`,
+                'success'
+            );
+
+            // Show results
+            this.showCleaningResults(totalBefore, duplicateGroups.length, totalRemoved, totalAfter, duplicateGroups);
+
+        } catch (error) {
+            this.addCleaningMessage(`Cleaning error: ${error.message}`, 'error');
+        } finally {
+            this.showCleaningLoading(false);
+        }
+    }
+
+    showCleaningResults(totalBefore, groupCount, removedCount, totalAfter, duplicateGroups) {
+        const resultsDiv = document.getElementById('cleaningResults');
+        const statsDiv = document.getElementById('cleaningStats');
+        const previewDiv = document.getElementById('cleaningDuplicatePreview');
+
+        // Show stats
+        statsDiv.innerHTML = `
+            <div class="stat-card">
+                <div class="stat-number">${totalBefore.toLocaleString()}</div>
+                <div class="stat-label">Original Rows</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${groupCount.toLocaleString()}</div>
+                <div class="stat-label">Duplicate Groups Found</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${removedCount.toLocaleString()}</div>
+                <div class="stat-label">Rows Removed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${totalAfter.toLocaleString()}</div>
+                <div class="stat-label">Final Rows</div>
+            </div>
+        `;
+
+        // Show duplicate groups preview (first 10 groups) with ALL columns
+        if (duplicateGroups.length > 0) {
+            const maxGroups = Math.min(duplicateGroups.length, 10);
+            // Use all columns from the data
+            const allCols = Object.keys(this.cleaningRawData[0] || {});
+
+            let html = '<div class="duplicate-groups-container">';
+            html += `<h4>Detected Duplicate Groups (showing ${maxGroups} of ${duplicateGroups.length})</h4>`;
+
+            for (let i = 0; i < maxGroups; i++) {
+                const group = duplicateGroups[i];
+                const keyParts = group.key.split('|||');
+                const headerLabel = `PromptID: ${keyParts[0]}, ParticipantID: ${keyParts[1]}, RespondedAt: ${keyParts[2]}`;
+
+                html += `<div class="duplicate-group">`;
+                html += `<div class="duplicate-group-header">Group ${i + 1}: ${this.escapeHtml(headerLabel)}</div>`;
+                html += '<div class="table-wrapper"><table><thead><tr>';
+                html += '<th>Status</th>';
+                allCols.forEach(col => {
+                    html += `<th>${this.escapeHtml(col)}</th>`;
+                });
+                html += '</tr></thead><tbody>';
+
+                // Show kept row
+                const keptRow = group.kept.row;
+                html += '<tr class="duplicate-row-kept">';
+                html += '<td>Kept (earliest)</td>';
+                allCols.forEach(col => {
+                    html += `<td>${this.escapeHtml(keptRow[col] || '')}</td>`;
+                });
+                html += '</tr>';
+
+                // Show removed rows
+                group.removed.forEach(removed => {
+                    html += '<tr class="duplicate-row-removed">';
+                    html += '<td>Removed</td>';
+                    allCols.forEach(col => {
+                        html += `<td>${this.escapeHtml(removed.row[col] || '')}</td>`;
+                    });
+                    html += '</tr>';
+                });
+
+                html += '</tbody></table></div></div>';
+            }
+
+            if (duplicateGroups.length > maxGroups) {
+                html += `<div class="show-more-duplicates">... and ${duplicateGroups.length - maxGroups} more duplicate group${duplicateGroups.length - maxGroups !== 1 ? 's' : ''}</div>`;
+            }
+
+            html += '</div>';
+            previewDiv.innerHTML = html;
+        } else {
+            previewDiv.innerHTML = '<p style="text-align: center; color: #64748b; padding: 20px;">No duplicates found in the data.</p>';
+        }
+
+        // Hide upload area, show results
+        document.getElementById('cleaningUploadArea').style.display = 'none';
+        document.getElementById('cleaningActionButtons').style.display = 'block';
+        resultsDiv.style.display = 'block';
+    }
+
+    downloadCleanedCSV() {
+        if (this.cleanedData.length === 0) {
+            this.addCleaningMessage('No cleaned data available for download.', 'error');
+            return;
+        }
+
+        const columns = Object.keys(this.cleanedData[0] || {});
+        let csvContent = columns.join(',') + '\n';
+
+        this.cleanedData.forEach(row => {
+            const values = columns.map(col => {
+                const value = row[col] || '';
+                if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+                    return '"' + value.replace(/"/g, '""') + '"';
+                }
+                return value;
+            });
+            csvContent += values.join(',') + '\n';
+        });
+
+        const today = new Date().toISOString().split('T')[0];
+        this.downloadFile(csvContent, `fabla_cleaned_data_${today}.csv`, 'text/csv');
+    }
+
+    downloadCleanedExcel() {
+        if (this.cleanedData.length === 0) {
+            this.addCleaningMessage('No cleaned data available for download.', 'error');
+            return;
+        }
+
+        try {
+            const ws = XLSX.utils.json_to_sheet(this.cleanedData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Cleaned_Data');
+            
+            const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            
+            const today = new Date().toISOString().split('T')[0];
+            this.downloadBlob(blob, `fabla_cleaned_data_${today}.xlsx`);
+        } catch (error) {
+            this.addCleaningMessage(`Excel export error: ${error.message}`, 'error');
+        }
+    }
+
+    resetCleaning() {
+        this.cleaningRawData = [];
+        this.cleanedData = [];
+        this.cleaningDuplicateGroups = [];
+
+        document.getElementById('cleaningFileInput').value = '';
+        document.getElementById('cleaningActionButtons').style.display = 'none';
+        document.getElementById('cleaningResults').style.display = 'none';
+        document.getElementById('cleaningFileList').innerHTML = '';
+        document.getElementById('cleaningStats').innerHTML = '';
+        document.getElementById('cleaningDuplicatePreview').innerHTML = '';
+        document.getElementById('cleaningPreview').innerHTML = '';
+
+        // Show upload area again
+        document.getElementById('cleaningUploadArea').style.display = 'block';
+
+        this.clearCleaningMessages();
+    }
+
+    showCleaningLoading(show) {
+        const loadingDiv = document.getElementById('cleaningLoading');
+        loadingDiv.classList.toggle('show', show);
+    }
+
+    addCleaningMessage(message, type = 'info') {
+        const messagesDiv = document.getElementById('cleaningMessages');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = type;
+        messageDiv.textContent = message;
+        messagesDiv.appendChild(messageDiv);
+    }
+
+    clearCleaningMessages() {
+        const messagesDiv = document.getElementById('cleaningMessages');
+        messagesDiv.innerHTML = '';
+    }
+
+    updateCleaningFileList(fileName, rowCount) {
+        const fileListDiv = document.getElementById('cleaningFileList');
+        fileListDiv.innerHTML = `
+            <div class="file-summary">
+                <div class="file-summary-header">
+                    <span class="file-icon">📄</span>
+                    <span class="file-count">${this.escapeHtml(fileName)}</span>
+                    <span class="file-rows">(${rowCount.toLocaleString()} rows)</span>
                 </div>
             </div>
         `;
