@@ -359,6 +359,33 @@ class CSVCollator {
         return rows;
     }
 
+    parseCSVContent(text) {
+        if (!text || !text.trim()) {
+            return [];
+        }
+
+        const rows = this.parseCSVText(text);
+        if (rows.length === 0) {
+            return [];
+        }
+
+        const headers = rows[0];
+        const data = [];
+
+        for (let i = 1; i < rows.length; i++) {
+            const values = rows[i];
+            const row = {};
+
+            headers.forEach((header, index) => {
+                row[header] = values[index] || '';
+            });
+
+            data.push(row);
+        }
+
+        return data;
+    }
+
     processData(allData) {
         try {
             // Always use ResponseID for deduplication
@@ -2063,7 +2090,7 @@ class CSVCollator {
 
             for (const file of files) {
                 const text = await file.text();
-                const parsed = this.csvParser.parse(text);
+                const parsed = this.parseCSVContent(text);
                 allData.push(...parsed);
                 this.transcriptFiles.push({
                     name: file.name,
