@@ -721,6 +721,19 @@ class CSVCollator {
         return div.innerHTML;
     }
 
+    formatFileSize(bytes) {
+        if (!Number.isFinite(bytes) || bytes <= 0) {
+            return '0 B';
+        }
+
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const unitIndex = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+        const value = bytes / Math.pow(1024, unitIndex);
+        const decimals = unitIndex === 0 ? 0 : 1;
+
+        return `${value.toFixed(decimals)} ${units[unitIndex]}`;
+    }
+
     // Participation Analysis Methods
     analyzeParticipation() {
         if (this.mergedData.length === 0) {
