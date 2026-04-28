@@ -3,6 +3,7 @@ class CSVCollator {
     constructor() {
         this.files = [];
         this.mergedData = [];
+        this.mergedColumns = [];
         this.participationAnalyzer = new ParticipationAnalyzer();
         this.referenceTranscriptExtractor = new ReferenceTranscriptExtractor();
         this.participationData = null;
@@ -21,6 +22,7 @@ class CSVCollator {
         this.cleaningRawData = [];
         this.cleanedData = [];
         this.cleaningDuplicateGroups = [];
+        this.cleaningResolvedColumns = null;
         this.init();
     }
 
@@ -403,6 +405,7 @@ class CSVCollator {
             }
             
             this.mergedData = this.deduplicate(allData, dedupCols, keepDuplicate);
+            this.mergedColumns = this.buildColumnUnion(this.mergedData);
             const afterCount = this.mergedData.length;
             const removedCount = beforeCount - afterCount;
             
@@ -516,7 +519,7 @@ class CSVCollator {
         if (showPreview && this.mergedData.length > 0) {
             const maxRows = parseInt(document.getElementById('maxPreviewRows').value);
             const previewData = this.mergedData.slice(0, maxRows);
-            const columns = Object.keys(this.mergedData[0] || {});
+            const columns = this.getMergedColumns();
 
             let tableHTML = '<div class="table-container"><div class="table-wrapper"><table><thead><tr>';
             columns.forEach(col => {
@@ -554,7 +557,7 @@ class CSVCollator {
     downloadCSV() {
         if (this.mergedData.length === 0) return;
 
-        const columns = Object.keys(this.mergedData[0] || {});
+        const columns = this.getMergedColumns();
         let csvContent = columns.join(',') + '\n';
 
         this.mergedData.forEach(row => {
@@ -577,8 +580,15 @@ class CSVCollator {
         if (this.mergedData.length === 0) return;
 
         try {
-            const columns = Object.keys(this.mergedData[0] || {});
-            const ws = XLSX.utils.json_to_sheet(this.mergedData);
+            const columns = this.getMergedColumns();
+            const normalizedData = this.mergedData.map(row => {
+                const normalizedRow = {};
+                columns.forEach(col => {
+                    normalizedRow[col] = row[col] || '';
+                });
+                return normalizedRow;
+            });
+            const ws = XLSX.utils.json_to_sheet(normalizedData, { header: columns });
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Collated_Data');
             
@@ -689,6 +699,7 @@ class CSVCollator {
     reset() {
         this.files = [];
         this.mergedData = [];
+        this.mergedColumns = [];
         this.participationData = null;
         this.originalSummaryData = null;
         this.originalAudioSummaryData = null;
@@ -719,6 +730,29 @@ class CSVCollator {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    buildColumnUnion(rows) {
+        const seen = new Set();
+        const orderedColumns = [];
+
+        rows.forEach(row => {
+            Object.keys(row || {}).forEach(col => {
+                if (!seen.has(col)) {
+                    seen.add(col);
+                    orderedColumns.push(col);
+                }
+            });
+        });
+
+        return orderedColumns;
+    }
+
+    getMergedColumns() {
+        if (this.mergedColumns && this.mergedColumns.length > 0) {
+            return this.mergedColumns;
+        }
+        return this.buildColumnUnion(this.mergedData);
     }
 
     formatFileSize(bytes) {
@@ -1769,14 +1803,15 @@ class CSVCollator {
             // Update file list
             this.updateCleaningFileList(file.name, data.length);
 
-            // Validate required columns exist
+            // Validate required columns exist (robust to case, spaces, underscores, and BOM)
             const requiredCols = ['PromptID', 'ParticipantID', 'RespondedAt', 'Date'];
-            const missingCols = requiredCols.filter(col => !columns.includes(col));
+            const { resolvedColumns, missingCols } = this.resolveCleaningColumns(columns);
             if (missingCols.length > 0) {
                 this.addCleaningMessage(`❌ Missing required columns: ${missingCols.join(', ')}. The file must contain PromptID, ParticipantID, RespondedAt, and Date columns.`, 'error');
                 this.showCleaningLoading(false);
                 return;
             }
+            this.cleaningResolvedColumns = resolvedColumns;
 
             // Auto-run duplicate cleaning with fixed parameters
             this.runDuplicateCleaning();
@@ -1793,9 +1828,15 @@ class CSVCollator {
             return;
         }
 
-        // Fixed columns for duplicate detection
-        const keyCols = ['PromptID', 'ParticipantID', 'RespondedAt'];
-        const dateCol = 'Date';
+        // Fixed columns for duplicate detection (resolved from uploaded header names)
+        const resolved = this.cleaningResolvedColumns || {
+            PromptID: 'PromptID',
+            ParticipantID: 'ParticipantID',
+            RespondedAt: 'RespondedAt',
+            Date: 'Date'
+        };
+        const keyCols = [resolved.PromptID, resolved.ParticipantID, resolved.RespondedAt];
+        const dateCol = resolved.Date;
 
         this.showCleaningLoading(true);
 
@@ -2068,6 +2109,46 @@ class CSVCollator {
                 </div>
             </div>
         `;
+    }
+
+    normalizeCleaningColumnName(name) {
+        return String(name || '')
+            .replace(/^\uFEFF/, '')
+            .trim()
+            .toLowerCase()
+            .replace(/[\s_-]/g, '');
+    }
+
+    resolveCleaningColumns(columns) {
+        const byNormalized = new Map();
+        columns.forEach(col => {
+            const normalized = this.normalizeCleaningColumnName(col);
+            // Keep first seen header for a normalized key
+            if (normalized && !byNormalized.has(normalized)) {
+                byNormalized.set(normalized, col);
+            }
+        });
+
+        const aliases = {
+            PromptID: ['promptid'],
+            ParticipantID: ['participantid'],
+            RespondedAt: ['respondedat'],
+            Date: ['date']
+        };
+
+        const resolvedColumns = {};
+        const missingCols = [];
+
+        Object.entries(aliases).forEach(([required, candidates]) => {
+            const found = candidates.find(candidate => byNormalized.has(candidate));
+            if (found) {
+                resolvedColumns[required] = byNormalized.get(found);
+            } else {
+                missingCols.push(required);
+            }
+        });
+
+        return { resolvedColumns, missingCols };
     }
 
     // Transcript-specific methods
