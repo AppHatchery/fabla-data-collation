@@ -1132,6 +1132,7 @@ class CSVCollator {
             tableHTML += '<table><thead><tr>';
             tableHTML += '<th>Participant ID</th>';
             tableHTML += '<th>Total Entries</th>';
+            tableHTML += '<th>Incentive</th>';
             
             dateRange.forEach(date => {
                 const formatted = this.formatDateForTable(date);
@@ -1144,6 +1145,7 @@ class CSVCollator {
                 tableHTML += '<tr>';
                 tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
                 tableHTML += `<td class="total-entries">${participant.TotalTextAudio || 0}</td>`;
+                tableHTML += '<td class="total-entries">-</td>';
                 
                 dateRange.forEach(date => {
                     const count = participant[date] || 0;
@@ -1569,6 +1571,7 @@ class CSVCollator {
             tableHTML += '<table><thead><tr>';
             tableHTML += '<th>Participant ID</th>';
             tableHTML += '<th>Total Entries</th>';
+            tableHTML += '<th>Incentive</th>';
             
             dateRange.forEach(date => {
                 const formatted = this.formatDateForTable(date);
@@ -1581,6 +1584,7 @@ class CSVCollator {
                 tableHTML += '<tr>';
                 tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
                 tableHTML += `<td class="total-entries">${participant.TotalTextAudio || 0}</td>`;
+                tableHTML += '<td class="total-entries">-</td>';
                 
                 dateRange.forEach(date => {
                     const count = participant[date] || 0;
