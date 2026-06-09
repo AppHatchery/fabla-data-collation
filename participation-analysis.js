@@ -21,6 +21,40 @@ class ParticipationAnalyzer {
         return isNaN(date.getTime()) ? null : date.toISOString().split('T')[0];
     }
 
+    // Helper function to parse a timestamp into a comparable epoch (ms).
+    // Handles the formats seen across exports so chronological ordering is correct
+    // regardless of source format. Returns null when no timestamp can be derived.
+    // NOTE: Date.UTC is used consistently so ordering is timezone-stable.
+    parseTimestamp(value) {
+        if (value === null || value === undefined) return null;
+        const str = String(value).trim();
+        if (!str) return null;
+
+        // ISO 8601 ("2026-05-08T07:34:53.645") or "YYYY-MM-DD HH:MM:SS"
+        let m = str.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+        if (m) {
+            return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], m[6] ? +m[6] : 0);
+        }
+
+        // Date-only ISO ("YYYY-MM-DD")
+        m = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (m) {
+            return Date.UTC(+m[1], +m[2] - 1, +m[3]);
+        }
+
+        // US-style "M/D/YY[YY][ H:MM[:SS]]" (e.g., "5/21/26 16:56")
+        m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+        if (m) {
+            let year = +m[3];
+            if (year < 100) year += year < 50 ? 2000 : 1900;
+            return Date.UTC(year, +m[1] - 1, +m[2], m[4] ? +m[4] : 0, m[5] ? +m[5] : 0, m[6] ? +m[6] : 0);
+        }
+
+        // Last resort: native parsing (kept for resilience to unexpected formats)
+        const t = Date.parse(str);
+        return isNaN(t) ? null : t;
+    }
+
     // Helper function to format date as YYYY-MM-DD (extract date directly from timestamp)
     formatDate(date) {
         // If date is already a string (from parseDate), return it directly
@@ -117,40 +151,48 @@ class ParticipationAnalyzer {
             dailyCounts[pid][date] = (dailyCounts[pid][date] || 0) + 1;
         });
         
-        // Step 4.5: Find most recent incentive per participant from Incentives rows
+        // Step 4.5: Find the chronologically LAST incentive per participant.
+        // We must report the most recent entry by timestamp (NOT the largest value):
+        // participants who delete and rejoin the app can have their incentive reset to a
+        // lower amount, and the system must match what the app currently shows.
+        // Timestamps are parsed into real epochs so ordering is correct across date
+        // formats (ISO "RespondedAt", "YYYY-MM-DD HH:MM:SS", and "M/D/YY HH:MM" Date columns).
         const incentiveRows = csvData.filter(item => item.QuestionsType === 'Incentives');
         const mostRecentIncentives = {};
         
-        incentiveRows.forEach(row => {
+        incentiveRows.forEach((row, index) => {
             const pid = row.ParticipantID;
             
             if (!row.Response) return; // Skip if no Response value
             
-            // Get timestamp for comparison - try RespondedAt first, then Date, then Response
-            let timestamp = null;
-            if (row.RespondedAt) {
-                timestamp = row.RespondedAt;
-            } else if (row.Date) {
-                timestamp = row.Date;
-            } else if (row.Response && row.Response.includes('T')) {
-                // If Response is a timestamp, use it
-                timestamp = row.Response;
+            // Prefer RespondedAt (precise ISO); fall back to the Date column. Both are
+            // parsed to a comparable epoch so we never rely on fragile string comparison.
+            let epoch = this.parseTimestamp(row.RespondedAt);
+            if (epoch === null) {
+                epoch = this.parseTimestamp(row.Date);
             }
             
-            // If we have a timestamp and either no existing incentive or this one is more recent
-            if (timestamp) {
-                if (!mostRecentIncentives[pid] || timestamp > mostRecentIncentives[pid].timestamp) {
-                    mostRecentIncentives[pid] = {
-                        value: row.Response, // Store original string value
-                        timestamp: timestamp
-                    };
-                }
-            } else if (!mostRecentIncentives[pid]) {
-                // If no timestamp available, store the first one we encounter
-                mostRecentIncentives[pid] = {
-                    value: row.Response,
-                    timestamp: '' // Empty timestamp means it can't be compared
-                };
+            const existing = mostRecentIncentives[pid];
+            if (!existing) {
+                mostRecentIncentives[pid] = { value: row.Response, epoch: epoch, order: index };
+                return;
+            }
+            
+            // Decide whether this row is the later (more recent) record.
+            let isNewer;
+            if (epoch !== null && existing.epoch !== null) {
+                // Both timestamped: later epoch wins; on exact ties, later row in file wins.
+                isNewer = epoch > existing.epoch || (epoch === existing.epoch && index > existing.order);
+            } else if (epoch !== null && existing.epoch === null) {
+                isNewer = true; // a timestamped row beats an untimestamped one
+            } else if (epoch === null && existing.epoch !== null) {
+                isNewer = false;
+            } else {
+                isNewer = index > existing.order; // neither timestamped: later row in file wins
+            }
+            
+            if (isNewer) {
+                mostRecentIncentives[pid] = { value: row.Response, epoch: epoch, order: index };
             }
         });
         
