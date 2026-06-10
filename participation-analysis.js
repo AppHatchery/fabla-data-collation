@@ -201,6 +201,30 @@ class ParticipationAnalyzer {
         Object.keys(mostRecentIncentives).forEach(pid => {
             maxIncentives[pid] = mostRecentIncentives[pid].value;
         });
+
+        // Build daily incentive values: for each participant+date, track the highest incentive
+        // recorded on that day. Used by the Incentive Analysis table.
+        // NOTE: parseTimestamp() is used (not parseDate()) because the Date column stores local
+        // time as a space-separated string (e.g. "2025-08-14 21:21:40"). parseDate() passes those
+        // through new Date() which converts to local→UTC, shifting evening timestamps to the
+        // next day. parseTimestamp() uses Date.UTC() on the literal components, so it stays
+        // consistent with how dateRange keys are derived from ISO end_time Response values.
+        const dailyIncentives = {};
+        incentiveRows.forEach(row => {
+            const pid = row.ParticipantID;
+            if (!row.Response) return;
+            const numVal = parseFloat(String(row.Response).replace(/[^0-9.-]/g, ''));
+            if (isNaN(numVal)) return;
+            let epoch = this.parseTimestamp(row.RespondedAt);
+            if (epoch === null) epoch = this.parseTimestamp(row.Date);
+            if (epoch === null) return;
+            const dateKey = new Date(epoch).toISOString().split('T')[0];
+            if (!dailyIncentives[pid]) dailyIncentives[pid] = {};
+            const existing = dailyIncentives[pid][dateKey];
+            if (!existing || numVal > existing.num) {
+                dailyIncentives[pid][dateKey] = { raw: row.Response, num: numVal };
+            }
+        });
         
         // Step 5: Create date range from actual data
         const dateRange = this.getDateRangeFromData(processedRows);
@@ -222,6 +246,17 @@ class ParticipationAnalyzer {
             });
             
             summaryData.push(row);
+        });
+
+        // Build incentive summary: same date columns as summaryData, cell = max incentive that day (raw string) or null
+        const incentiveSummaryData = participantIds.map(pid => {
+            const row = { ParticipantID: pid };
+            dateRange.forEach(date => {
+                row[date] = (dailyIncentives[pid] && dailyIncentives[pid][date])
+                    ? dailyIncentives[pid][date].raw
+                    : null;
+            });
+            return row;
         });
         
         // Step 6: Process audio/textaudio rows if present
@@ -294,6 +329,7 @@ class ParticipationAnalyzer {
         return {
             summary: summaryData,
             audioSummary: audioSummaryData,
+            incentiveSummary: incentiveSummaryData,
             participantCount: participantIds.length,
             totalEntries: Object.values(totalCounts).reduce((sum, count) => sum + count, 0),
             message: 'Analysis completed successfully.'

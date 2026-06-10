@@ -17,6 +17,8 @@ class CSVCollator {
         this.analysisParticipationData = null;
         this.originalAnalysisSummaryData = null; // Store original analysis data for filtering
         this.originalAnalysisAudioSummaryData = null;
+        this.originalAnalysisIncentiveSummaryData = null;
+        this.originalIncentiveSummaryData = null;
         
         // Cleaning-specific properties
         this.cleaningRawData = [];
@@ -105,11 +107,19 @@ class CSVCollator {
         participantSelect.addEventListener('change', this.filterChartByParticipant.bind(this));
         resetBtn.addEventListener('click', this.reset.bind(this));
         
-        // Date filter event - use event delegation since there may be multiple date filters
+        // Date filter event delegation — handles both section-specific filter IDs
         document.addEventListener('change', (e) => {
-            if (e.target && e.target.id === 'dateFilter') {
+            if (e.target && (e.target.id === 'participationDateFilter' || e.target.id === 'analysisDateFilter')) {
                 this.filterByDateRange(e);
             }
+        });
+
+        // View tab buttons (Adherence / Incentive)
+        document.addEventListener('click', (e) => {
+            if (e.target && e.target.id === 'participationAdherenceTab') this.switchViewTab('participation', 'adherence');
+            if (e.target && e.target.id === 'participationIncentiveTab')  this.switchViewTab('participation', 'incentive');
+            if (e.target && e.target.id === 'analysisAdherenceTab')       this.switchViewTab('analysis', 'adherence');
+            if (e.target && e.target.id === 'analysisIncentiveTab')        this.switchViewTab('analysis', 'incentive');
         });
         
         // Tool selector events
@@ -703,19 +713,19 @@ class CSVCollator {
         this.participationData = null;
         this.originalSummaryData = null;
         this.originalAudioSummaryData = null;
+        this.originalIncentiveSummaryData = null;
         
         document.getElementById('fileInput').value = '';
         document.getElementById('actionButtons').style.display = 'none';
         document.getElementById('results').classList.remove('show');
         document.getElementById('participationResults').style.display = 'none';
+        document.getElementById('participationIncentiveSection').style.display = 'none';
         document.getElementById('fileList').innerHTML = '';
         document.getElementById('participantSelect').innerHTML = '<option value="all">All Participants</option>';
         
         // Reset date filter
-        const dateFilter = document.getElementById('dateFilter');
-        if (dateFilter) {
-            dateFilter.value = 'all';
-        }
+        const dateFilter = document.getElementById('participationDateFilter');
+        if (dateFilter) dateFilter.value = 'all';
         
         // Show upload area and settings again
         const uploadArea = document.getElementById('uploadArea');
@@ -792,7 +802,7 @@ class CSVCollator {
             const stats = this.participationAnalyzer.generateStats(this.participationData.summary);
             
             // Display the analysis results
-            this.showParticipationResults(stats, this.participationData.summary, this.participationData.audioSummary);
+            this.showParticipationResults(stats, this.participationData.summary, this.participationData.audioSummary, this.participationData.incentiveSummary);
             
             this.addMessage('Participation analysis completed successfully!', 'success');
             
@@ -803,7 +813,7 @@ class CSVCollator {
         }
     }
 
-    showParticipationResults(stats, summaryData, audioSummaryData) {
+    showParticipationResults(stats, summaryData, audioSummaryData, incentiveSummaryData = null) {
         const resultsDiv = document.getElementById('results');
         const participationDiv = document.getElementById('participationResults');
         
@@ -821,6 +831,7 @@ class CSVCollator {
         // Store original data for filtering
         this.originalSummaryData = JSON.parse(JSON.stringify(summaryData)); // Deep copy
         this.originalAudioSummaryData = audioSummaryData ? JSON.parse(JSON.stringify(audioSummaryData)) : null;
+        this.originalIncentiveSummaryData = incentiveSummaryData ? JSON.parse(JSON.stringify(incentiveSummaryData)) : null;
         
         // Populate participant filter
         this.populateParticipantFilter(summaryData);
@@ -828,8 +839,14 @@ class CSVCollator {
         // Show chart
         this.showParticipationChart(summaryData);
         
-        // Show table
+        // Show adherence table
         this.showParticipationTable(summaryData, audioSummaryData);
+
+        // Populate incentive table and reset to adherence tab
+        if (incentiveSummaryData) {
+            this.showIncentiveTable(incentiveSummaryData, summaryData, 'participationIncentiveTable');
+        }
+        this.switchViewTab('participation', 'adherence');
     }
 
     showParticipationStats(stats) {
@@ -978,13 +995,16 @@ class CSVCollator {
 
     // Apply date filter and update display
     filterByDateRange(event) {
-        // Get the dateFilter from the event target or find it
-        const dateFilter = event && event.target ? event.target : document.getElementById('dateFilter');
-        const selectedDays = dateFilter && dateFilter.value ? dateFilter.value : 'all';
-        
         // Check which section is active - main participation or analysis
         const participationResults = document.getElementById('participationResults');
         const analysisResults = document.getElementById('analysisResults');
+        
+        // Get the dateFilter from the event target, or fall back to the active section's filter
+        const isAnalysisFallback = analysisResults && analysisResults.style.display !== 'none';
+        const dateFilter = (event && event.target)
+            ? event.target
+            : document.getElementById(isAnalysisFallback ? 'analysisDateFilter' : 'participationDateFilter');
+        const selectedDays = dateFilter && dateFilter.value ? dateFilter.value : 'all';
         
         // Determine which section is active based on visibility
         const isMainParticipation = participationResults && participationResults.style.display !== 'none';
@@ -1029,6 +1049,15 @@ class CSVCollator {
             }
             
             this.showParticipationTable(filteredSummary, filteredAudio);
+
+            // Update incentive table with filtered date range (and participant if selected)
+            if (this.originalIncentiveSummaryData) {
+                let filteredIncentive = this.filterIncentiveByDateRange(this.originalIncentiveSummaryData, filteredDateRange);
+                if (selectedParticipant !== 'all') {
+                    filteredIncentive = filteredIncentive.filter(p => p.ParticipantID === selectedParticipant);
+                }
+                this.showIncentiveTable(filteredIncentive, filteredSummary, 'participationIncentiveTable');
+            }
         } else if (isAnalysis && this.originalAnalysisSummaryData && this.originalAnalysisSummaryData.length > 0) {
             // Analysis section
             const summaryData = this.originalAnalysisSummaryData;
@@ -1071,6 +1100,15 @@ class CSVCollator {
             }
             
             this.showAnalysisParticipationTable(filteredSummary, filteredAudio);
+
+            // Update incentive table with filtered date range (and participant if selected)
+            if (this.originalAnalysisIncentiveSummaryData) {
+                let filteredIncentive = this.filterIncentiveByDateRange(this.originalAnalysisIncentiveSummaryData, filteredDateRange);
+                if (selectedParticipant !== 'all') {
+                    filteredIncentive = filteredIncentive.filter(p => p.ParticipantID === selectedParticipant);
+                }
+                this.showIncentiveTable(filteredIncentive, filteredSummary, 'analysisIncentiveTable');
+            }
         }
     }
 
@@ -1201,7 +1239,7 @@ class CSVCollator {
         }
         
         // Get current date filter
-        const dateFilter = document.getElementById('dateFilter');
+        const dateFilter = document.getElementById('participationDateFilter');
         const selectedDays = dateFilter ? dateFilter.value : 'all';
         
         // Get all available dates from original data
@@ -1249,6 +1287,15 @@ class CSVCollator {
         
         // Show table with both filters applied
         this.showParticipationTable(finalSummary, finalAudio);
+
+        // Update incentive table with same participant + date filters
+        if (this.originalIncentiveSummaryData) {
+            let filteredIncentive = this.filterIncentiveByDateRange(this.originalIncentiveSummaryData, filteredDateRange);
+            if (selectedParticipant !== 'all') {
+                filteredIncentive = filteredIncentive.filter(p => p.ParticipantID === selectedParticipant);
+            }
+            this.showIncentiveTable(filteredIncentive, finalSummary, 'participationIncentiveTable');
+        }
     }
 
     updateChartDisplay(chartData) {
@@ -1403,7 +1450,7 @@ class CSVCollator {
             analysisUploadArea.style.display = 'none';
             
             // Display the analysis results
-            this.showAnalysisResults(stats, this.analysisParticipationData.summary, this.analysisParticipationData.audioSummary);
+            this.showAnalysisResults(stats, this.analysisParticipationData.summary, this.analysisParticipationData.audioSummary, this.analysisParticipationData.incentiveSummary);
             
             this.addAnalysisMessage('📊 Participation analysis completed successfully!', 'success');
             
@@ -1412,13 +1459,14 @@ class CSVCollator {
         }
     }
 
-    showAnalysisResults(stats, summaryData, audioSummaryData) {
+    showAnalysisResults(stats, summaryData, audioSummaryData, incentiveSummaryData = null) {
         const analysisResults = document.getElementById('analysisResults');
         analysisResults.style.display = 'block';
         
         // Store original data for filtering
         this.originalAnalysisSummaryData = JSON.parse(JSON.stringify(summaryData)); // Deep copy
         this.originalAnalysisAudioSummaryData = audioSummaryData ? JSON.parse(JSON.stringify(audioSummaryData)) : null;
+        this.originalAnalysisIncentiveSummaryData = incentiveSummaryData ? JSON.parse(JSON.stringify(incentiveSummaryData)) : null;
         
         // Show participation statistics
         this.showAnalysisParticipationStats(stats);
@@ -1433,8 +1481,14 @@ class CSVCollator {
         // Show chart
         this.showAnalysisParticipationChart(summaryData);
         
-        // Show table
+        // Show adherence table
         this.showAnalysisParticipationTable(summaryData, audioSummaryData);
+
+        // Populate incentive table and reset to adherence tab
+        if (incentiveSummaryData) {
+            this.showIncentiveTable(incentiveSummaryData, summaryData, 'analysisIncentiveTable');
+        }
+        this.switchViewTab('analysis', 'adherence');
     }
 
     showAnalysisParticipationStats(stats) {
@@ -1601,6 +1655,161 @@ class CSVCollator {
         tableDiv.innerHTML = tableHTML;
     }
 
+    // Switch between the Adherence and Incentive table views for a given section.
+    // section: 'participation' | 'analysis'
+    // tab:     'adherence'     | 'incentive'
+    switchViewTab(section, tab) {
+        const adherenceViewId  = section === 'analysis' ? 'analysisAdherenceView'       : 'participationAdherenceView';
+        const incentiveSectId  = section === 'analysis' ? 'analysisIncentiveSection'    : 'participationIncentiveSection';
+        const adherenceTabId   = section === 'analysis' ? 'analysisAdherenceTab'        : 'participationAdherenceTab';
+        const incentiveTabId   = section === 'analysis' ? 'analysisIncentiveTab'        : 'participationIncentiveTab';
+
+        const adherenceView = document.getElementById(adherenceViewId);
+        const incentiveSect = document.getElementById(incentiveSectId);
+        const adherenceBtn  = document.getElementById(adherenceTabId);
+        const incentiveBtn  = document.getElementById(incentiveTabId);
+
+        if (tab === 'adherence') {
+            if (adherenceView) adherenceView.style.display = 'block';
+            if (incentiveSect) incentiveSect.style.display = 'none';
+            if (adherenceBtn)  adherenceBtn.classList.add('active');
+            if (incentiveBtn)  incentiveBtn.classList.remove('active');
+        } else {
+            if (adherenceView) adherenceView.style.display = 'none';
+            if (incentiveSect) incentiveSect.style.display = 'block';
+            if (adherenceBtn)  adherenceBtn.classList.remove('active');
+            if (incentiveBtn)  incentiveBtn.classList.add('active');
+        }
+    }
+
+    // Filter incentive summary data to a subset of date columns
+    filterIncentiveByDateRange(incentiveSummaryData, dateRange) {
+        if (!incentiveSummaryData) return null;
+        return incentiveSummaryData.map(participant => {
+            const filtered = { ParticipantID: participant.ParticipantID };
+            dateRange.forEach(date => {
+                filtered[date] = participant[date] !== undefined ? participant[date] : null;
+            });
+            return filtered;
+        });
+    }
+
+    // Render the incentive progression table.
+    // incentiveSummaryData: array of { ParticipantID, "YYYY-MM-DD": rawValue|null, ... }
+    // summaryData: the adherence summary (same shape), used to read diary counts for tooltip
+    // containerId: the <div> id to inject into
+    showIncentiveTable(incentiveSummaryData, summaryData, containerId) {
+        const tableDiv = document.getElementById(containerId);
+        if (!tableDiv) return;
+
+        if (!incentiveSummaryData || incentiveSummaryData.length === 0) {
+            tableDiv.innerHTML = '<p style="text-align:center;color:#64748b;padding:40px;">No incentive data available for the selected period.</p>';
+            return;
+        }
+
+        const dateRange = Object.keys(incentiveSummaryData[0] || {})
+            .filter(key => key !== 'ParticipantID' && /^\d{4}-\d{2}-\d{2}$/.test(key))
+            .sort()
+            .reverse();
+
+        // Show "no data" message when there are no incentive values in the current date range
+        const hasAny = incentiveSummaryData.some(p =>
+            dateRange.some(d => p[d] !== null && p[d] !== undefined && p[d] !== '')
+        );
+        if (!hasAny) {
+            tableDiv.innerHTML = '<p style="text-align:center;color:#64748b;padding:40px;">No incentive data available for the selected period.</p>';
+            return;
+        }
+
+        // Only show participants that have at least one incentive value in the current date range
+        const visibleParticipants = incentiveSummaryData.filter(p =>
+            dateRange.some(d => p[d] !== null && p[d] !== undefined && p[d] !== '')
+        );
+
+        if (visibleParticipants.length === 0) {
+            tableDiv.innerHTML = '<p style="text-align:center;color:#64748b;padding:40px;">No incentive data available for the selected period.</p>';
+            return;
+        }
+
+        // Build lookup maps from adherence summaryData:
+        //   diaryMap[pid][date]  → diary count (for tooltip)
+        //   incentiveMap[pid]    → final (most-recent) incentive string (for header column)
+        const diaryMap = {};
+        const incentiveMap = {};
+        if (summaryData) {
+            summaryData.forEach(p => {
+                diaryMap[p.ParticipantID] = {};
+                dateRange.forEach(date => {
+                    diaryMap[p.ParticipantID][date] = p[date] || 0;
+                });
+                if (p.Incentive !== null && p.Incentive !== undefined) {
+                    incentiveMap[p.ParticipantID] = p.Incentive;
+                }
+            });
+        }
+
+        // Compute global min/max across visible participants for colour scaling
+        const allNums = visibleParticipants.flatMap(p =>
+            dateRange.map(d => {
+                const v = p[d];
+                if (v === null || v === undefined || v === '') return null;
+                const n = parseFloat(String(v).replace(/[^0-9.-]/g, ''));
+                return isNaN(n) ? null : n;
+            }).filter(n => n !== null)
+        );
+        const minVal = allNums.length > 0 ? Math.min(...allNums) : 0;
+        const maxVal = allNums.length > 0 ? Math.max(...allNums) : 1;
+
+        // Returns inline style string for a given raw incentive value.
+        // Interpolates background from pale green (#dcfce7) to rich green (#16a34a)
+        // and text from dark green (#14532d) to white, based on relative value.
+        const cellStyle = (rawValue) => {
+            if (rawValue === null || rawValue === undefined || rawValue === '') return '';
+            const num = parseFloat(String(rawValue).replace(/[^0-9.-]/g, ''));
+            if (isNaN(num)) return '';
+            const t = maxVal > minVal ? (num - minVal) / (maxVal - minVal) : 0.5;
+            const lerp = (a, b) => Math.round(a + (b - a) * t);
+            const bg = `rgb(${lerp(220,22)},${lerp(252,163)},${lerp(231,74)})`;
+            const fg = t > 0.55 ? '#ffffff' : '#14532d';
+            return `background:${bg};color:${fg};`;
+        };
+
+        let tableHTML = '<table><thead><tr>';
+        tableHTML += '<th>Participant ID</th>';
+        tableHTML += '<th>Final Incentive</th>';
+        dateRange.forEach(date => {
+            const fmt = this.formatDateForTable(date);
+            tableHTML += `<th><div class="table-day-of-week">${fmt.dayOfWeek}</div><div class="table-date">${fmt.dateStr}</div></th>`;
+        });
+        tableHTML += '</tr></thead><tbody>';
+
+        visibleParticipants.forEach(participant => {
+            tableHTML += '<tr>';
+            tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
+            const finalIncentive = incentiveMap[participant.ParticipantID];
+            tableHTML += `<td class="total-entries">${finalIncentive !== null && finalIncentive !== undefined ? finalIncentive : '-'}</td>`;
+
+            dateRange.forEach(date => {
+                const val = participant[date];
+                const diaryCount = (diaryMap[participant.ParticipantID] || {})[date] || 0;
+                const tooltip = `${diaryCount} ${diaryCount === 1 ? 'diary' : 'diaries'} completed`;
+                const style = cellStyle(val);
+                const display = (val !== null && val !== undefined && val !== '') ? val : '';
+
+                if (display) {
+                    tableHTML += `<td class="incentive-cell has-tooltip" style="${style}" data-tooltip="${tooltip}">${display}</td>`;
+                } else {
+                    tableHTML += `<td class="incentive-cell"></td>`;
+                }
+            });
+
+            tableHTML += '</tr>';
+        });
+
+        tableHTML += '</tbody></table>';
+        tableDiv.innerHTML = tableHTML;
+    }
+
     filterAnalysisChartByParticipant() {
         const participantSelect = document.getElementById('analysisParticipantSelect');
         const selectedParticipant = participantSelect.value;
@@ -1632,6 +1841,15 @@ class CSVCollator {
         }
         
         this.showAnalysisParticipationTable(filteredSummary, filteredAudioSummary);
+
+        // Update incentive table with same participant filter
+        if (this.originalAnalysisIncentiveSummaryData) {
+            let filteredIncentive = this.originalAnalysisIncentiveSummaryData;
+            if (selectedParticipant !== 'all') {
+                filteredIncentive = filteredIncentive.filter(p => p.ParticipantID === selectedParticipant);
+            }
+            this.showIncentiveTable(filteredIncentive, filteredSummary, 'analysisIncentiveTable');
+        }
     }
 
     updateAnalysisChartDisplay(chartData) {
@@ -1691,20 +1909,18 @@ class CSVCollator {
         this.analysisParticipationData = null;
         this.originalAnalysisSummaryData = null;
         this.originalAnalysisAudioSummaryData = null;
+        this.originalAnalysisIncentiveSummaryData = null;
         
         document.getElementById('analysisFileInput').value = '';
         document.getElementById('analysisActionButtons').style.display = 'none';
         document.getElementById('analysisResults').style.display = 'none';
+        document.getElementById('analysisIncentiveSection').style.display = 'none';
         document.getElementById('analysisFileList').innerHTML = '';
         document.getElementById('analysisParticipantSelect').innerHTML = '<option value="all">All Participants</option>';
         
-        // Reset date filter if it exists in analysis section
-        const dateFilters = document.querySelectorAll('#dateFilter');
-        dateFilters.forEach(filter => {
-            if (filter.closest('#analysisResults')) {
-                filter.value = 'all';
-            }
-        });
+        // Reset date filter
+        const analysisDateFilter = document.getElementById('analysisDateFilter');
+        if (analysisDateFilter) analysisDateFilter.value = 'all';
         
         // Show upload area again
         const analysisUploadArea = document.getElementById('analysisUploadArea');
