@@ -55,6 +55,54 @@ class ParticipationAnalyzer {
         return isNaN(t) ? null : t;
     }
 
+    // Returns the "study date" (YYYY-MM-DD) for a timestamp, applying a 4 AM cutoff:
+    // entries recorded before 04:00 are counted toward the previous calendar day.
+    // The hour is read directly from the raw string so no timezone conversion occurs —
+    // the written hour is treated as the participant's local time.
+    getStudyDate(value) {
+        if (value === null || value === undefined) return null;
+        const str = String(value).trim();
+        if (!str) return null;
+
+        let datePart = null;
+        let hour = null;
+
+        // "YYYY-MM-DD HH:MM" or "YYYY-MM-DDThh:mm…" (ISO and space-separated variants)
+        let m = str.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{1,2}):/);
+        if (m) {
+            datePart = m[1];
+            hour = +m[2];
+        }
+
+        // US-style "M/D/YY[YY] H:MM"
+        if (!datePart) {
+            m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s+(\d{1,2}):/);
+            if (m) {
+                let year = +m[3];
+                if (year < 100) year += year < 50 ? 2000 : 1900;
+                datePart = `${year}-${String(+m[1]).padStart(2, '0')}-${String(+m[2]).padStart(2, '0')}`;
+                hour = +m[4];
+            }
+        }
+
+        // Date-only "YYYY-MM-DD" — no time component, no cutoff applied
+        if (!datePart) {
+            m = str.match(/^(\d{4}-\d{2}-\d{2})$/);
+            if (m) datePart = m[1];
+        }
+
+        if (!datePart) return null;
+
+        // Apply 4 AM cutoff: entries before 04:00 belong to the previous calendar day
+        if (hour !== null && hour < 4) {
+            const [y, mo, d] = datePart.split('-').map(Number);
+            const prev = new Date(Date.UTC(y, mo - 1, d - 1));
+            datePart = prev.toISOString().split('T')[0];
+        }
+
+        return datePart;
+    }
+
     // Helper function to format date as YYYY-MM-DD (extract date directly from timestamp)
     formatDate(date) {
         // If date is already a string (from parseDate), return it directly
@@ -121,12 +169,12 @@ class ParticipationAnalyzer {
             };
         }
         
-        // Step 2: Extract dates from Response column (like original)
+        // Step 2: Extract dates from Response column, applying the 4 AM study-day cutoff
         const processedRows = endTimeRows.map(row => {
-            const responseDate = this.parseDate(row.Response);
+            const responseDate = this.getStudyDate(row.Response);
             return {
                 ...row,
-                ResponseDate: responseDate ? this.formatDate(responseDate) : null
+                ResponseDate: responseDate || null
             };
         }).filter(row => row.ResponseDate !== null);
         
@@ -203,22 +251,16 @@ class ParticipationAnalyzer {
         });
 
         // Build daily incentive values: for each participant+date, track the highest incentive
-        // recorded on that day. Used by the Incentive Analysis table.
-        // NOTE: parseTimestamp() is used (not parseDate()) because the Date column stores local
-        // time as a space-separated string (e.g. "2025-08-14 21:21:40"). parseDate() passes those
-        // through new Date() which converts to local→UTC, shifting evening timestamps to the
-        // next day. parseTimestamp() uses Date.UTC() on the literal components, so it stays
-        // consistent with how dateRange keys are derived from ISO end_time Response values.
+        // recorded on that day. getStudyDate() is used so the 4 AM cutoff is applied and no
+        // timezone conversion shifts the written hour to a different calendar day.
         const dailyIncentives = {};
         incentiveRows.forEach(row => {
             const pid = row.ParticipantID;
             if (!row.Response) return;
             const numVal = parseFloat(String(row.Response).replace(/[^0-9.-]/g, ''));
             if (isNaN(numVal)) return;
-            let epoch = this.parseTimestamp(row.RespondedAt);
-            if (epoch === null) epoch = this.parseTimestamp(row.Date);
-            if (epoch === null) return;
-            const dateKey = new Date(epoch).toISOString().split('T')[0];
+            const dateKey = this.getStudyDate(row.RespondedAt) || this.getStudyDate(row.Date);
+            if (!dateKey) return;
             if (!dailyIncentives[pid]) dailyIncentives[pid] = {};
             const existing = dailyIncentives[pid][dateKey];
             if (!existing || numVal > existing.num) {
@@ -269,20 +311,12 @@ class ParticipationAnalyzer {
         if (audioRows.length > 0) {
             console.log(`Found audio/textaudio entries. Generating second summary...`);
             
-            // Extract dates from audio rows
+            // Extract dates from audio rows, applying the 4 AM study-day cutoff
             const processedAudioRows = audioRows.map(row => {
-                let audioDate = null;
-                
-                // Try RespondedAt first, then Date
-                if (row.RespondedAt) {
-                    audioDate = this.parseDate(row.RespondedAt);
-                } else if (row.Date) {
-                    audioDate = this.parseDate(row.Date);
-                }
-                
+                const audioDate = this.getStudyDate(row.RespondedAt) || this.getStudyDate(row.Date);
                 return {
                     ...row,
-                    AudioDate: audioDate ? this.formatDate(audioDate) : null
+                    AudioDate: audioDate || null
                 };
             }).filter(row => row.AudioDate !== null);
             
