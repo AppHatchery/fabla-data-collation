@@ -130,6 +130,9 @@ class CSVCollator {
         // Cleaning tab
         const cleaningTab = document.getElementById('cleaningTab');
         cleaningTab.addEventListener('click', () => this.switchTool('cleaning'));
+
+        const issuesTab = document.getElementById('issuesTab');
+        issuesTab.addEventListener('click', () => this.switchTool('issues'));
         
         // Transcript-specific events
         transcriptUploadArea.addEventListener('click', () => transcriptFileInput.click());
@@ -177,18 +180,114 @@ class CSVCollator {
         e.currentTarget.classList.remove('dragover');
     }
 
+    isCsvFile(file) {
+        return file.name.toLowerCase().endsWith('.csv');
+    }
+
+    partitionCsvFiles(files) {
+        const valid = [];
+        const invalid = [];
+
+        files.forEach(file => {
+            if (this.isCsvFile(file)) {
+                valid.push(file);
+            } else {
+                invalid.push(file);
+            }
+        });
+
+        return { valid, invalid };
+    }
+
+    getInvalidFileTypeMessage(invalidFiles) {
+        if (invalidFiles.length === 0) return null;
+
+        if (invalidFiles.length === 1) {
+            const file = invalidFiles[0];
+            const parts = file.name.split('.');
+            const ext = parts.length > 1 ? parts.pop().toLowerCase() : 'unknown';
+            return `Invalid file type: "${file.name}" is not a CSV file (.${ext}). Please upload a .csv file.`;
+        }
+
+        const fileList = invalidFiles.map(file => `"${file.name}"`).join(', ');
+        return `Invalid file type: ${fileList} are not CSV files. Please upload .csv files only.`;
+    }
+
+    getUploadErrorId(uploadAreaId) {
+        return `${uploadAreaId}Error`;
+    }
+
+    showUploadFieldError(uploadAreaId, message) {
+        const uploadArea = document.getElementById(uploadAreaId);
+        if (uploadArea) {
+            uploadArea.classList.add('upload-error');
+        }
+
+        const errorEl = document.getElementById(this.getUploadErrorId(uploadAreaId));
+        if (errorEl) {
+            errorEl.textContent = message.startsWith('❌') ? message : `❌ ${message}`;
+            errorEl.hidden = false;
+        }
+    }
+
+    clearUploadFieldError(uploadAreaId) {
+        const uploadArea = document.getElementById(uploadAreaId);
+        if (uploadArea) {
+            uploadArea.classList.remove('upload-error');
+        }
+
+        const errorEl = document.getElementById(this.getUploadErrorId(uploadAreaId));
+        if (errorEl) {
+            errorEl.textContent = '';
+            errorEl.hidden = true;
+        }
+    }
+
+    clearUploadInput(inputId) {
+        const input = document.getElementById(inputId);
+        if (input) {
+            input.value = '';
+        }
+    }
+
+    filterCsvUpload(files, { uploadAreaId, inputId } = {}) {
+        const { valid, invalid } = this.partitionCsvFiles(files);
+        const invalidMessage = this.getInvalidFileTypeMessage(invalid);
+
+        if (invalid.length > 0) {
+            if (uploadAreaId) {
+                this.showUploadFieldError(uploadAreaId, invalidMessage);
+            }
+            if (inputId) this.clearUploadInput(inputId);
+        } else if (uploadAreaId) {
+            this.clearUploadFieldError(uploadAreaId);
+        }
+
+        return { valid, invalidMessage };
+    }
+
     handleDrop(e) {
         e.preventDefault();
         e.currentTarget.classList.remove('dragover');
-        const files = Array.from(e.dataTransfer.files).filter(file => 
-            file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv')
-        );
-        this.processFiles(files);
+        const { valid, invalidMessage } = this.filterCsvUpload(Array.from(e.dataTransfer.files), {
+            uploadAreaId: 'uploadArea',
+            inputId: 'fileInput'
+        });
+
+        if (valid.length > 0) {
+            this.processFiles(valid);
+        }
     }
 
     handleFileSelect(e) {
-        const files = Array.from(e.target.files);
-        this.processFiles(files);
+        const { valid, invalidMessage } = this.filterCsvUpload(Array.from(e.target.files), {
+            uploadAreaId: 'uploadArea',
+            inputId: 'fileInput'
+        });
+
+        if (valid.length > 0) {
+            this.processFiles(valid);
+        }
     }
 
     async processFiles(files) {
@@ -732,6 +831,7 @@ class CSVCollator {
         const settingsSection = document.querySelector('.settings');
         uploadArea.style.display = 'block';
         settingsSection.style.display = 'block';
+        this.clearUploadFieldError('uploadArea');
         
         this.clearMessages();
     }
@@ -1112,92 +1212,106 @@ class CSVCollator {
         }
     }
 
-    showParticipationTable(summaryData, audioSummaryData) {
-        const tableDiv = document.getElementById('participationTable');
-        
-        if (!summaryData || summaryData.length === 0) {
-            tableDiv.innerHTML = '<p>No participation data available.</p>';
-            return;
-        }
-
-        // Get the actual date range from the data (extract dates from summary data columns)
-        // Only include keys that match YYYY-MM-DD date format and exclude known non-date columns
+    buildAdherenceTableHTML(summaryData, audioSummaryData, { strictDateFilter = false } = {}) {
         const dateRange = Object.keys(summaryData[0] || {})
             .filter(key => {
-                // Exclude known non-date columns
                 if (key === 'ParticipantID' || key === 'TotalEntries' || key === 'Incentive') {
                     return false;
                 }
-                // Only include keys that match YYYY-MM-DD date format
-                return /^\d{4}-\d{2}-\d{2}$/.test(key);
+                if (strictDateFilter) {
+                    return /^\d{4}-\d{2}-\d{2}$/.test(key);
+                }
+                return true;
             })
             .sort()
             .reverse();
-        
+
+        const audioByParticipant = {};
+        if (audioSummaryData) {
+            audioSummaryData.forEach(participant => {
+                audioByParticipant[participant.ParticipantID] = participant;
+            });
+        }
+
         let tableHTML = '<table><thead><tr>';
         tableHTML += '<th>Participant ID</th>';
         tableHTML += '<th>Total Entries</th>';
-        tableHTML += '<th>Incentive</th>';
-        
-        // Add date columns (show all dates from data in scrollable table)
+        tableHTML += '<th>Voice Diaries</th>';
+        tableHTML += '<th>Total Compensation</th>';
+
         dateRange.forEach(date => {
             const formatted = this.formatDateForTable(date);
             tableHTML += `<th><div class="table-day-of-week">${formatted.dayOfWeek}</div><div class="table-date">${formatted.dateStr}</div></th>`;
         });
-        
+
         tableHTML += '</tr></thead><tbody>';
-        
+
         summaryData.forEach(participant => {
+            const audioParticipant = audioByParticipant[participant.ParticipantID];
+            const voiceDiaries = audioParticipant ? (audioParticipant.TotalTextAudio || 0) : 0;
+            const compensation = participant.Incentive !== null && participant.Incentive !== undefined
+                ? participant.Incentive
+                : '-';
+
             tableHTML += '<tr>';
             tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
-            tableHTML += `<td class="total-entries">${participant.TotalEntries}</td>`;
-            tableHTML += `<td class="total-entries">${participant.Incentive !== null && participant.Incentive !== undefined ? participant.Incentive : '-'}</td>`;
-            
+            tableHTML += `<td class="entry-count">${participant.TotalEntries}</td>`;
+            tableHTML += `<td class="voice-diaries-count">${voiceDiaries}</td>`;
+            tableHTML += `<td class="total-compensation">${compensation}</td>`;
+
             dateRange.forEach(date => {
                 const count = participant[date] || 0;
                 const className = count > 0 ? 'daily-count has-entries' : 'daily-count';
                 tableHTML += `<td class="${className}">${count}</td>`;
             });
-            
+
             tableHTML += '</tr>';
         });
-        
+
         tableHTML += '</tbody></table>';
-        
-        // Add audio summary if available
+
         if (audioSummaryData && audioSummaryData.length > 0) {
-            tableHTML += '<div style="margin-top: 24px; padding: 12px 16px; background: #f8fafc; border-top: 2px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;"><h4 style="margin: 0; font-size: 1rem; color: #1e293b;">Audio/TextAudio Entries</h4></div>';
+            tableHTML += '<div style="margin-top: 24px; padding: 12px 16px; background: #f8fafc; border-top: 2px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;"><h4 style="margin: 0; font-size: 1rem; color: #1e293b;">Voice Diaries</h4></div>';
             tableHTML += '<table><thead><tr>';
             tableHTML += '<th>Participant ID</th>';
-            tableHTML += '<th>Total Entries</th>';
-            tableHTML += '<th>Incentive</th>';
-            
+            tableHTML += '<th>Voice Diaries</th>';
+
             dateRange.forEach(date => {
                 const formatted = this.formatDateForTable(date);
                 tableHTML += `<th><div class="table-day-of-week">${formatted.dayOfWeek}</div><div class="table-date">${formatted.dateStr}</div></th>`;
             });
-            
+
             tableHTML += '</tr></thead><tbody>';
-            
+
             audioSummaryData.forEach(participant => {
                 tableHTML += '<tr>';
                 tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
-                tableHTML += `<td class="total-entries">${participant.TotalTextAudio || 0}</td>`;
-                tableHTML += '<td class="total-entries">-</td>';
-                
+                tableHTML += `<td class="voice-diaries-count">${participant.TotalTextAudio || 0}</td>`;
+
                 dateRange.forEach(date => {
                     const count = participant[date] || 0;
                     const className = count > 0 ? 'daily-count has-entries' : 'daily-count';
                     tableHTML += `<td class="${className}">${count}</td>`;
                 });
-                
+
                 tableHTML += '</tr>';
             });
-            
+
             tableHTML += '</tbody></table>';
         }
-        
-        tableDiv.innerHTML = tableHTML;
+
+        return tableHTML;
+    }
+
+    showParticipationTable(summaryData, audioSummaryData) {
+        const tableDiv = document.getElementById('participationTable');
+
+        if (!summaryData || summaryData.length === 0) {
+            tableDiv.innerHTML = '<p>No participation data available.</p>';
+            return;
+        }
+
+        tableDiv.innerHTML = this.buildAdherenceTableHTML(summaryData, audioSummaryData, { strictDateFilter: true });
     }
 
     downloadParticipationCSV() {
@@ -1351,22 +1465,26 @@ class CSVCollator {
         const analysisTab = document.getElementById('analysisTab');
         const transcriptTab = document.getElementById('transcriptTab');
         const cleaningTab = document.getElementById('cleaningTab');
+        const issuesTab = document.getElementById('issuesTab');
         const aggregationCard = document.getElementById('aggregationCard');
         const analysisCard = document.getElementById('analysisCard');
         const transcriptCard = document.getElementById('transcriptCard');
         const cleaningCard = document.getElementById('cleaningCard');
+        const issuesCard = document.getElementById('issuesCard');
         
         // Remove active class from all tabs
         aggregationTab.classList.remove('active');
         analysisTab.classList.remove('active');
         transcriptTab.classList.remove('active');
         cleaningTab.classList.remove('active');
+        issuesTab.classList.remove('active');
         
         // Hide all cards
         aggregationCard.style.display = 'none';
         analysisCard.style.display = 'none';
         transcriptCard.style.display = 'none';
         cleaningCard.style.display = 'none';
+        issuesCard.style.display = 'none';
         
         if (tool === 'aggregation') {
             aggregationTab.classList.add('active');
@@ -1380,6 +1498,9 @@ class CSVCollator {
         } else if (tool === 'cleaning') {
             cleaningTab.classList.add('active');
             cleaningCard.style.display = 'block';
+        } else if (tool === 'issues') {
+            issuesTab.classList.add('active');
+            issuesCard.style.display = 'block';
         }
     }
 
@@ -1387,15 +1508,25 @@ class CSVCollator {
     handleAnalysisDrop(e) {
         e.preventDefault();
         e.currentTarget.classList.remove('dragover');
-        const files = Array.from(e.dataTransfer.files).filter(file => 
-            file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv')
-        );
-        this.processAnalysisFiles(files);
+        const { valid, invalidMessage } = this.filterCsvUpload(Array.from(e.dataTransfer.files), {
+            uploadAreaId: 'analysisUploadArea',
+            inputId: 'analysisFileInput'
+        });
+
+        if (valid.length > 0) {
+            this.processAnalysisFiles(valid);
+        }
     }
 
     handleAnalysisFileSelect(e) {
-        const files = Array.from(e.target.files);
-        this.processAnalysisFiles(files);
+        const { valid, invalidMessage } = this.filterCsvUpload(Array.from(e.target.files), {
+            uploadAreaId: 'analysisUploadArea',
+            inputId: 'analysisFileInput'
+        });
+
+        if (valid.length > 0) {
+            this.processAnalysisFiles(valid);
+        }
     }
 
     async processAnalysisFiles(files) {
@@ -1577,82 +1708,13 @@ class CSVCollator {
 
     showAnalysisParticipationTable(summaryData, audioSummaryData) {
         const tableDiv = document.getElementById('analysisParticipationTable');
-        
+
         if (!summaryData || summaryData.length === 0) {
             tableDiv.innerHTML = '<p>No participation data available.</p>';
             return;
         }
 
-        // Get the actual date range from the data (extract dates from summary data columns)
-        const dateRange = Object.keys(summaryData[0] || {})
-            .filter(key => key !== 'ParticipantID' && key !== 'TotalEntries' && key !== 'Incentive')
-            .sort()
-            .reverse();
-        
-        let tableHTML = '<table><thead><tr>';
-        tableHTML += '<th>Participant ID</th>';
-        tableHTML += '<th>Total Entries</th>';
-        tableHTML += '<th>Incentive</th>';
-        
-        // Add date columns (show all dates from data in scrollable table)
-        dateRange.forEach(date => {
-            const formatted = this.formatDateForTable(date);
-            tableHTML += `<th><div class="table-day-of-week">${formatted.dayOfWeek}</div><div class="table-date">${formatted.dateStr}</div></th>`;
-        });
-        
-        tableHTML += '</tr></thead><tbody>';
-        
-        summaryData.forEach(participant => {
-            tableHTML += '<tr>';
-            tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
-            tableHTML += `<td class="total-entries">${participant.TotalEntries}</td>`;
-            tableHTML += `<td class="total-entries">${participant.Incentive !== null && participant.Incentive !== undefined ? participant.Incentive : '-'}</td>`;
-            
-            dateRange.forEach(date => {
-                const count = participant[date] || 0;
-                const className = count > 0 ? 'daily-count has-entries' : 'daily-count';
-                tableHTML += `<td class="${className}">${count}</td>`;
-            });
-            
-            tableHTML += '</tr>';
-        });
-        
-        tableHTML += '</tbody></table>';
-        
-        // Add audio summary if available
-        if (audioSummaryData && audioSummaryData.length > 0) {
-            tableHTML += '<div style="margin-top: 24px; padding: 12px 16px; background: #f8fafc; border-top: 2px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;"><h4 style="margin: 0; font-size: 1rem; color: #1e293b;">Audio/TextAudio Entries</h4></div>';
-            tableHTML += '<table><thead><tr>';
-            tableHTML += '<th>Participant ID</th>';
-            tableHTML += '<th>Total Entries</th>';
-            tableHTML += '<th>Incentive</th>';
-            
-            dateRange.forEach(date => {
-                const formatted = this.formatDateForTable(date);
-                tableHTML += `<th><div class="table-day-of-week">${formatted.dayOfWeek}</div><div class="table-date">${formatted.dateStr}</div></th>`;
-            });
-            
-            tableHTML += '</tr></thead><tbody>';
-            
-            audioSummaryData.forEach(participant => {
-                tableHTML += '<tr>';
-                tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
-                tableHTML += `<td class="total-entries">${participant.TotalTextAudio || 0}</td>`;
-                tableHTML += '<td class="total-entries">-</td>';
-                
-                dateRange.forEach(date => {
-                    const count = participant[date] || 0;
-                    const className = count > 0 ? 'daily-count has-entries' : 'daily-count';
-                    tableHTML += `<td class="${className}">${count}</td>`;
-                });
-                
-                tableHTML += '</tr>';
-            });
-            
-            tableHTML += '</tbody></table>';
-        }
-        
-        tableDiv.innerHTML = tableHTML;
+        tableDiv.innerHTML = this.buildAdherenceTableHTML(summaryData, audioSummaryData);
     }
 
     // Switch between the Adherence and Incentive table views for a given section.
@@ -1787,7 +1849,7 @@ class CSVCollator {
             tableHTML += '<tr>';
             tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
             const finalIncentive = incentiveMap[participant.ParticipantID];
-            tableHTML += `<td class="total-entries">${finalIncentive !== null && finalIncentive !== undefined ? finalIncentive : '-'}</td>`;
+            tableHTML += `<td class="total-compensation">${finalIncentive !== null && finalIncentive !== undefined ? finalIncentive : '-'}</td>`;
 
             dateRange.forEach(date => {
                 const val = participant[date];
@@ -1925,6 +1987,7 @@ class CSVCollator {
         // Show upload area again
         const analysisUploadArea = document.getElementById('analysisUploadArea');
         analysisUploadArea.style.display = 'block';
+        this.clearUploadFieldError('analysisUploadArea');
         
         this.clearAnalysisMessages();
     }
@@ -1988,22 +2051,34 @@ class CSVCollator {
     handleCleaningDrop(e) {
         e.preventDefault();
         e.currentTarget.classList.remove('dragover');
-        const files = Array.from(e.dataTransfer.files).filter(file => 
-            file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv')
-        );
-        if (files.length > 0) {
-            this.processCleaningFile(files[0]); // Only process the first file
+        const { valid, invalidMessage } = this.filterCsvUpload(Array.from(e.dataTransfer.files), {
+            uploadAreaId: 'cleaningUploadArea',
+            inputId: 'cleaningFileInput'
+        });
+
+        if (valid.length > 0) {
+            this.processCleaningFile(valid[0]);
         }
     }
 
     handleCleaningFileSelect(e) {
-        const files = Array.from(e.target.files);
-        if (files.length > 0) {
-            this.processCleaningFile(files[0]);
+        const { valid, invalidMessage } = this.filterCsvUpload(Array.from(e.target.files), {
+            uploadAreaId: 'cleaningUploadArea',
+            inputId: 'cleaningFileInput'
+        });
+
+        if (valid.length > 0) {
+            this.processCleaningFile(valid[0]);
         }
     }
 
     async processCleaningFile(file) {
+        if (!this.isCsvFile(file)) {
+            this.showUploadFieldError('cleaningUploadArea', this.getInvalidFileTypeMessage([file]));
+            this.clearUploadInput('cleaningFileInput');
+            return;
+        }
+
         this.showCleaningLoading(true);
         this.clearCleaningMessages();
 
@@ -2296,6 +2371,7 @@ class CSVCollator {
 
         // Show upload area again
         document.getElementById('cleaningUploadArea').style.display = 'block';
+        this.clearUploadFieldError('cleaningUploadArea');
 
         this.clearCleaningMessages();
     }
@@ -2375,15 +2451,25 @@ class CSVCollator {
     handleTranscriptDrop(e) {
         e.preventDefault();
         e.currentTarget.classList.remove('dragover');
-        const files = Array.from(e.dataTransfer.files).filter(file => 
-            file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv')
-        );
-        this.processTranscriptFiles(files);
+        const { valid, invalidMessage } = this.filterCsvUpload(Array.from(e.dataTransfer.files), {
+            uploadAreaId: 'transcriptUploadArea',
+            inputId: 'transcriptFileInput'
+        });
+
+        if (valid.length > 0) {
+            this.processTranscriptFiles(valid);
+        }
     }
 
     handleTranscriptFileSelect(e) {
-        const files = Array.from(e.target.files);
-        this.processTranscriptFiles(files);
+        const { valid, invalidMessage } = this.filterCsvUpload(Array.from(e.target.files), {
+            uploadAreaId: 'transcriptUploadArea',
+            inputId: 'transcriptFileInput'
+        });
+
+        if (valid.length > 0) {
+            this.processTranscriptFiles(valid);
+        }
     }
 
     async processTranscriptFiles(files) {
@@ -2397,6 +2483,7 @@ class CSVCollator {
         transcriptLoading.style.display = 'flex';
         transcriptMessages.innerHTML = '';
         transcriptActionButtons.style.display = 'none';
+        this.clearUploadFieldError('transcriptUploadArea');
 
         try {
             this.transcriptFiles = [];
@@ -2483,12 +2570,13 @@ class CSVCollator {
         transcriptFileList.innerHTML = '';
         transcriptMessages.innerHTML = '';
         transcriptActionButtons.style.display = 'none';
+        this.clearUploadFieldError('transcriptUploadArea');
     }
 
     addTranscriptMessage(message, type = 'info') {
         const messagesDiv = document.getElementById('transcriptMessages');
         const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${type}`;
+        messageDiv.className = type;
         messageDiv.textContent = message;
         messagesDiv.appendChild(messageDiv);
     }

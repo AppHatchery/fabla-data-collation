@@ -268,6 +268,43 @@
             transform: translateY(-2px);
         }
 
+        .upload-area.upload-error {
+            border-color: #dc3545;
+            background: #fef2f2;
+        }
+
+        .upload-area.upload-error:hover {
+            border-color: #dc3545;
+            background: #fee2e2;
+        }
+
+        .upload-area.upload-error .upload-icon {
+            color: #dc3545;
+        }
+
+        .upload-field {
+            margin-bottom: 48px;
+        }
+
+        .upload-field .upload-area {
+            margin-bottom: 0;
+        }
+
+        .upload-error-message {
+            margin-top: 12px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            background: #fef2f2;
+            color: #721c24;
+            border-left: 4px solid #dc3545;
+            font-size: 0.9375rem;
+            line-height: 1.5;
+        }
+
+        .upload-error-message[hidden] {
+            display: none;
+        }
+
         .upload-icon {
             font-size: 3rem;
             color: #3b82f6;
@@ -782,8 +819,29 @@
             color: #1e293b;
             position: sticky;
             top: 0;
+            z-index: 1;
             text-align: center;
             vertical-align: bottom;
+        }
+
+        .participation-table th:first-child,
+        .participation-table td:first-child {
+            position: sticky;
+            left: 0;
+            z-index: 2;
+            background: white;
+            box-shadow: 2px 0 6px rgba(15, 23, 42, 0.06);
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        .participation-table th:first-child {
+            z-index: 3;
+            background: #f8fafc;
+        }
+
+        .participation-table tr:hover td:first-child {
+            background: #f8fafc;
         }
 
         .table-day-of-week {
@@ -808,7 +866,16 @@
             color: #3b82f6;
         }
 
-        .participation-table .total-entries {
+        .participation-table .entry-count {
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .participation-table .voice-diaries-count {
+            color: #1e293b;
+        }
+
+        .participation-table .total-compensation {
             font-weight: 600;
             color: #059669;
         }
@@ -885,6 +952,10 @@
             box-shadow: 0 8px 25px rgba(59, 130, 246, 0.2);
         }
 
+        .tool-button-wide {
+            grid-column: 1 / -1;
+        }
+
         .tool-icon {
             font-size: 2rem;
             flex-shrink: 0;
@@ -905,6 +976,106 @@
             font-size: 0.875rem;
             color: #64748b;
             line-height: 1.5;
+        }
+
+        /* Common Issues FAQ */
+        .issues-intro {
+            background: #f0f9ff;
+            border: 1px solid #0ea5e9;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 32px;
+        }
+
+        .issues-intro h3 {
+            color: #0c4a6e;
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .issues-intro p {
+            color: #075985;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            margin: 0;
+        }
+
+        .faq-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .faq-item {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .faq-item[open] {
+            background: white;
+            border-color: #bfdbfe;
+            box-shadow: 0 1px 3px rgba(59, 130, 246, 0.12);
+        }
+
+        .faq-question {
+            list-style: none;
+            cursor: pointer;
+            padding: 20px 24px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #1e293b;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            line-height: 1.5;
+        }
+
+        .faq-question::-webkit-details-marker {
+            display: none;
+        }
+
+        .faq-question::before {
+            content: '▸';
+            color: #3b82f6;
+            flex-shrink: 0;
+            margin-top: 1px;
+            transition: transform 0.2s ease;
+        }
+
+        .faq-item[open] .faq-question::before {
+            transform: rotate(90deg);
+        }
+
+        .faq-question:hover {
+            color: #2563eb;
+        }
+
+        .faq-answer {
+            padding: 0 24px 24px 48px;
+            color: #475569;
+            font-size: 0.9375rem;
+            line-height: 1.7;
+        }
+
+        .faq-answer p {
+            margin: 0 0 12px;
+        }
+
+        .faq-answer p:last-child {
+            margin-bottom: 0;
+        }
+
+        .faq-label {
+            display: inline-block;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: #3b82f6;
+            margin-bottom: 6px;
         }
 
         /* Analysis Info Styles */
@@ -1335,6 +1506,13 @@
                             <div class="tool-description">Clean duplicates caused by data upload glitches. Automatically detects and removes duplicate entries, keeping the earliest one.</div>
                         </div>
                     </button>
+                    <button class="tool-button tool-button-wide" id="issuesTab" data-tool="issues">
+                        <div class="tool-icon">❓</div>
+                        <div class="tool-content">
+                            <div class="tool-title">Common Issues Participants May Face</div>
+                            <div class="tool-description">Look up frequent participant issues and recommended next steps for study staff.</div>
+                        </div>
+                    </button>
                 </div>
             </div>
 
@@ -1360,11 +1538,14 @@
                 </div>
             </div>
 
-            <div class="upload-area" id="uploadArea">
-                <div class="upload-icon">📊</div>
-                <h3>Drop your CSV files here or click to browse</h3>
-                <p>Select multiple CSV files to merge and deduplicate</p>
-                <input type="file" id="fileInput" class="file-input" multiple accept=".csv" />
+            <div class="upload-field">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📊</div>
+                    <h3>Drop your CSV files here or click to browse</h3>
+                    <p>Select multiple CSV files to merge and deduplicate</p>
+                    <input type="file" id="fileInput" class="file-input" multiple accept=".csv" />
+                </div>
+                <div class="upload-error-message" id="uploadAreaError" hidden></div>
             </div>
 
             <div class="settings">
@@ -1481,11 +1662,14 @@
 
             <!-- Analysis Card -->
             <div class="main-card" id="analysisCard" style="display: none;">
-                <div class="upload-area" id="analysisUploadArea">
-                    <div class="upload-icon">📈</div>
-                    <h3>Upload CSV for Participation Analysis</h3>
-                    <p>Upload your raw CSV data to analyze participation patterns and engagement metrics</p>
-                    <input type="file" id="analysisFileInput" class="file-input" accept=".csv" />
+                <div class="upload-field">
+                    <div class="upload-area" id="analysisUploadArea">
+                        <div class="upload-icon">📈</div>
+                        <h3>Upload CSV for Participation Analysis</h3>
+                        <p>Upload your raw CSV data to analyze participation patterns and engagement metrics</p>
+                        <input type="file" id="analysisFileInput" class="file-input" accept=".csv" />
+                    </div>
+                    <div class="upload-error-message" id="analysisUploadAreaError" hidden></div>
                 </div>
 
                 <div class="analysis-info">
@@ -1564,11 +1748,14 @@
             </div>
 
             <div class="main-card" id="transcriptCard" style="display: none;">
-                <div class="upload-area" id="transcriptUploadArea">
-                    <div class="upload-icon">📝</div>
-                    <h3>Upload CSV for Transcript Extraction</h3>
-                    <p>Upload your CSV data to extract Date, Reference, and Transcript columns. Only rows with Reference data will be included.</p>
-                    <input type="file" id="transcriptFileInput" class="file-input" accept=".csv" multiple />
+                <div class="upload-field">
+                    <div class="upload-area" id="transcriptUploadArea">
+                        <div class="upload-icon">📝</div>
+                        <h3>Upload CSV for Transcript Extraction</h3>
+                        <p>Upload your CSV data to extract Date, Reference, and Transcript columns. Only rows with Reference data will be included.</p>
+                        <input type="file" id="transcriptFileInput" class="file-input" accept=".csv" multiple />
+                    </div>
+                    <div class="upload-error-message" id="transcriptUploadAreaError" hidden></div>
                 </div>
 
                 <div class="file-list" id="transcriptFileList"></div>
@@ -1609,11 +1796,14 @@
                     </div>
                 </div>
 
-                <div class="upload-area" id="cleaningUploadArea">
-                    <div class="upload-icon">🧹</div>
-                    <h3>Upload CSV for Duplicate Cleaning</h3>
-                    <p>Upload your CSV file to automatically detect and remove duplicates caused by data upload glitches</p>
-                    <input type="file" id="cleaningFileInput" class="file-input" accept=".csv" />
+                <div class="upload-field">
+                    <div class="upload-area" id="cleaningUploadArea">
+                        <div class="upload-icon">🧹</div>
+                        <h3>Upload CSV for Duplicate Cleaning</h3>
+                        <p>Upload your CSV file to automatically detect and remove duplicates caused by data upload glitches</p>
+                        <input type="file" id="cleaningFileInput" class="file-input" accept=".csv" />
+                    </div>
+                    <div class="upload-error-message" id="cleaningUploadAreaError" hidden></div>
                 </div>
 
                 <div class="file-list" id="cleaningFileList"></div>
@@ -1636,6 +1826,57 @@
                     <div class="stats" id="cleaningStats"></div>
                     <div id="cleaningDuplicatePreview"></div>
                     <div class="preview" id="cleaningPreview"></div>
+                </div>
+            </div>
+
+            <div class="main-card" id="issuesCard" style="display: none;">
+                <div class="issues-intro">
+                    <h3>Common Issues Participants May Face</h3>
+                    <p>Use this FAQ when a participant reports a problem. Each item includes the issue as they may describe it and the recommended next step.</p>
+                </div>
+
+                <div class="faq-list">
+                    <details class="faq-item">
+                        <summary class="faq-question">I'm not receiving notifications from Fabla, even though notification permissions are turned on. (Android)</summary>
+                        <div class="faq-answer">
+                            <div class="faq-label">Solution</div>
+                            <p>Battery Saver mode on Android restricts background activity, which blocks the app from sending notifications even when permissions are correctly enabled.</p>
+                            <p>Confirm the participant does not have Battery Saver mode turned on. If it's on, turn it off (or disable battery optimization specifically for Fabla) and confirm notifications resume.</p>
+                        </div>
+                    </details>
+
+                    <details class="faq-item">
+                        <summary class="faq-question">The survey page won't load and shows a red error screen (Page Not Found)</summary>
+                        <div class="faq-answer">
+                            <div class="faq-label">Solution</div>
+                            <p>The phone may be offline, and survey submission requires internet connectivity. If the participant has no way to get back online, advise them to skip the survey and proceed with the diary.</p>
+                        </div>
+                    </details>
+
+                    <details class="faq-item">
+                        <summary class="faq-question">I do not know what my study string is, or my study string is incorrect</summary>
+                        <div class="faq-answer">
+                            <div class="faq-label">Solution</div>
+                            <p>Instruct the participant to enter their provided alphanumeric code for Fabla, not the participant ID, on the first screen when they open Fabla.</p>
+                        </div>
+                    </details>
+
+                    <details class="faq-item">
+                        <summary class="faq-question">The diary failed to submit. A screen saying "Oops, something went wrong" may appear</summary>
+                        <div class="faq-answer">
+                            <div class="faq-label">Solution</div>
+                            <p>If there is a lapse in connectivity, the diary will fail to upload to the server. This will not result in data loss. Instruct the participant to upload the diary the next time they have a steady internet connection. Multiple diaries can be uploaded in bulk after a period of being offline.</p>
+                        </div>
+                    </details>
+
+                    <details class="faq-item">
+                        <summary class="faq-question">I reinstalled Fabla on a new or different phone and can't see my past entries in History anymore</summary>
+                        <div class="faq-answer">
+                            <div class="faq-label">Solution</div>
+                            <p>Reinstalling the app clears the local History tab on that device.</p>
+                            <p>No action needed — past submissions are already saved with the study team. The participant can resume normally from their next scheduled entry.</p>
+                        </div>
+                    </details>
                 </div>
             </div>
         </div>
