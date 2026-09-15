@@ -1316,8 +1316,8 @@
 
         .view-tab {
             flex: 1;
-            max-width: 320px;
-            padding: 12px 32px;
+            max-width: 280px;
+            padding: 12px 20px;
             white-space: nowrap;
             border: none;
             background: transparent;
@@ -1347,6 +1347,132 @@
             font-size: 0.8125rem;
             padding: 14px 16px 0;
             margin: 0;
+        }
+
+        /* Calculate Adherence controls */
+        .calc-adherence-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px 24px;
+            align-items: flex-end;
+            padding: 16px;
+            margin-bottom: 8px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+        }
+
+        .calc-adherence-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .calc-adherence-field label {
+            font-size: 0.8125rem;
+            font-weight: 600;
+            color: #475569;
+        }
+
+        .calc-adherence-field input {
+            width: 160px;
+            padding: 8px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 0.9375rem;
+            color: #1e293b;
+            background: #ffffff;
+        }
+
+        .calc-adherence-field input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        }
+
+        .calc-adherence-hint {
+            color: #64748b;
+            font-size: 0.8125rem;
+            flex: 1;
+            min-width: 200px;
+            padding-bottom: 8px;
+        }
+
+        .participation-table .calc-include-cell {
+            text-align: center;
+            width: 56px;
+        }
+
+        .participation-table .calc-include-cell input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: #3b82f6;
+        }
+
+        .participation-table .adherence-pct {
+            text-align: center;
+            font-weight: 700;
+            color: #1e293b;
+            white-space: nowrap;
+        }
+
+        .participation-table .adherence-pct.is-low {
+            color: #dc2626;
+        }
+
+        .participation-table .adherence-pct.is-mid {
+            color: #d97706;
+        }
+
+        .participation-table .adherence-pct.is-high {
+            color: #16a34a;
+        }
+
+        .participation-table tr.calc-excluded td {
+            opacity: 0.45;
+        }
+
+        .participation-table tr.calc-excluded td:first-child {
+            opacity: 1;
+        }
+
+        .calc-adherence-summary {
+            margin-top: 16px;
+            padding: 16px 20px;
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px 32px;
+            align-items: center;
+        }
+
+        .calc-adherence-summary-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .calc-adherence-summary-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .calc-adherence-summary-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1e40af;
+        }
+
+        .calc-adherence-summary-note {
+            margin-left: auto;
+            font-size: 0.8125rem;
+            color: #64748b;
         }
 
         /* Incentive Analysis Table */
@@ -1641,15 +1767,36 @@
                     <div class="chart-container" id="chartContainer"></div>
                 </div>
 
-                <!-- Adherence / Incentive tab switch -->
+                <!-- Adherence / Calculate / Incentive tab switch -->
                 <div class="view-tabs">
                     <button class="view-tab active" id="participationAdherenceTab">📋 Adherence Monitoring</button>
+                    <button class="view-tab" id="participationCalculateTab">📊 Calculate Adherence</button>
                     <button class="view-tab" id="participationIncentiveTab">💰 Incentive Tracking</button>
                 </div>
 
                 <div class="participation-table-container" id="participationAdherenceView">
                     <div class="scroll-indicator">← Scroll horizontally to see all available dates →</div>
                     <div class="participation-table" id="participationTable"></div>
+                </div>
+
+                <div class="participation-table-container" id="participationCalculateSection" style="display: none;">
+                    <div class="calc-adherence-controls">
+                        <div class="calc-adherence-field">
+                            <label for="participationExpectedTotal">Expected total entries</label>
+                            <input type="number" id="participationExpectedTotal" min="1" step="1" placeholder="e.g. 60" />
+                        </div>
+                        <div class="calc-adherence-field">
+                            <label for="participationExpectedAudio">Expected audio entries</label>
+                            <input type="number" id="participationExpectedAudio" min="1" step="1" placeholder="e.g. 30" />
+                        </div>
+                        <div class="calc-adherence-field">
+                            <label for="participationStudyLength">Length of study (days)</label>
+                            <input type="number" id="participationStudyLength" min="1" step="1" placeholder="e.g. 30" />
+                        </div>
+                        <p class="calc-adherence-hint">Uncheck participants to exclude them (e.g. test subjects). Length of study auto-unchecks anyone still mid-study, counting from their first submission day.</p>
+                    </div>
+                    <div class="scroll-indicator">← Scroll horizontally to see all available dates →</div>
+                    <div class="participation-table" id="participationCalculateTable"></div>
                 </div>
 
                 <div class="participation-table-container" id="participationIncentiveSection" style="display: none;">
@@ -1728,15 +1875,36 @@
                         <div class="chart-container" id="analysisChartContainer"></div>
                     </div>
 
-                    <!-- Adherence / Incentive tab switch -->
+                    <!-- Adherence / Calculate / Incentive tab switch -->
                     <div class="view-tabs">
                         <button class="view-tab active" id="analysisAdherenceTab">📋 Adherence Monitoring</button>
+                        <button class="view-tab" id="analysisCalculateTab">📊 Calculate Adherence</button>
                         <button class="view-tab" id="analysisIncentiveTab">💰 Incentive Tracking</button>
                     </div>
 
                     <div class="participation-table-container" id="analysisAdherenceView">
                         <div class="scroll-indicator">← Scroll horizontally to see all available dates →</div>
                         <div class="participation-table" id="analysisParticipationTable"></div>
+                    </div>
+
+                    <div class="participation-table-container" id="analysisCalculateSection" style="display: none;">
+                        <div class="calc-adherence-controls">
+                            <div class="calc-adherence-field">
+                                <label for="analysisExpectedTotal">Expected total entries</label>
+                                <input type="number" id="analysisExpectedTotal" min="1" step="1" placeholder="e.g. 60" />
+                            </div>
+                            <div class="calc-adherence-field">
+                                <label for="analysisExpectedAudio">Expected audio entries</label>
+                                <input type="number" id="analysisExpectedAudio" min="1" step="1" placeholder="e.g. 30" />
+                            </div>
+                            <div class="calc-adherence-field">
+                                <label for="analysisStudyLength">Length of study (days)</label>
+                                <input type="number" id="analysisStudyLength" min="1" step="1" placeholder="e.g. 30" />
+                            </div>
+                            <p class="calc-adherence-hint">Uncheck participants to exclude them (e.g. test subjects). Length of study auto-unchecks anyone still mid-study, counting from their first submission day.</p>
+                        </div>
+                        <div class="scroll-indicator">← Scroll horizontally to see all available dates →</div>
+                        <div class="participation-table" id="analysisCalculateTable"></div>
                     </div>
 
                     <div class="participation-table-container" id="analysisIncentiveSection" style="display: none;">

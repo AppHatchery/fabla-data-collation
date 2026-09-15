@@ -19,6 +19,30 @@ class CSVCollator {
         this.originalAnalysisAudioSummaryData = null;
         this.originalAnalysisIncentiveSummaryData = null;
         this.originalIncentiveSummaryData = null;
+
+        // Calculate Adherence tab state (per section)
+        this.calculateAdherenceState = {
+            participation: {
+                expectedTotal: '',
+                expectedAudio: '',
+                lengthOfStudy: '',
+                excluded: new Set(),
+                forceInclude: new Set(),
+                summaryData: null,
+                audioSummaryData: null,
+                strictDateFilter: true
+            },
+            analysis: {
+                expectedTotal: '',
+                expectedAudio: '',
+                lengthOfStudy: '',
+                excluded: new Set(),
+                forceInclude: new Set(),
+                summaryData: null,
+                audioSummaryData: null,
+                strictDateFilter: false
+            }
+        };
         
         // Cleaning-specific properties
         this.cleaningRawData = [];
@@ -114,12 +138,36 @@ class CSVCollator {
             }
         });
 
-        // View tab buttons (Adherence / Incentive)
+        // View tab buttons (Adherence / Calculate / Incentive)
         document.addEventListener('click', (e) => {
             if (e.target && e.target.id === 'participationAdherenceTab') this.switchViewTab('participation', 'adherence');
+            if (e.target && e.target.id === 'participationCalculateTab')  this.switchViewTab('participation', 'calculate');
             if (e.target && e.target.id === 'participationIncentiveTab')  this.switchViewTab('participation', 'incentive');
             if (e.target && e.target.id === 'analysisAdherenceTab')       this.switchViewTab('analysis', 'adherence');
+            if (e.target && e.target.id === 'analysisCalculateTab')        this.switchViewTab('analysis', 'calculate');
             if (e.target && e.target.id === 'analysisIncentiveTab')        this.switchViewTab('analysis', 'incentive');
+        });
+
+        // Calculate Adherence expected-entry / study-length inputs
+        document.addEventListener('input', (e) => {
+            if (!e.target) return;
+            if (e.target.id === 'participationExpectedTotal' || e.target.id === 'participationExpectedAudio' || e.target.id === 'participationStudyLength') {
+                this.handleCalculateAdherenceInput('participation', e.target);
+            }
+            if (e.target.id === 'analysisExpectedTotal' || e.target.id === 'analysisExpectedAudio' || e.target.id === 'analysisStudyLength') {
+                this.handleCalculateAdherenceInput('analysis', e.target);
+            }
+        });
+
+        // Calculate Adherence include/exclude checkboxes
+        document.addEventListener('change', (e) => {
+            if (e.target && e.target.classList && e.target.classList.contains('calc-adherence-include')) {
+                const section = e.target.dataset.section;
+                const participantId = e.target.dataset.participantId;
+                if (section && participantId) {
+                    this.handleCalculateAdherenceToggle(section, participantId, e.target.checked);
+                }
+            }
         });
         
         // Tool selector events
@@ -813,18 +861,31 @@ class CSVCollator {
         this.originalSummaryData = null;
         this.originalAudioSummaryData = null;
         this.originalIncentiveSummaryData = null;
+        this.resetCalculateAdherenceState('participation');
         
         document.getElementById('fileInput').value = '';
         document.getElementById('actionButtons').style.display = 'none';
         document.getElementById('results').classList.remove('show');
         document.getElementById('participationResults').style.display = 'none';
         document.getElementById('participationIncentiveSection').style.display = 'none';
+        const participationCalculateSection = document.getElementById('participationCalculateSection');
+        if (participationCalculateSection) participationCalculateSection.style.display = 'none';
         document.getElementById('fileList').innerHTML = '';
         document.getElementById('participantSelect').innerHTML = '<option value="all">All Participants</option>';
         
         // Reset date filter
         const dateFilter = document.getElementById('participationDateFilter');
         if (dateFilter) dateFilter.value = 'all';
+
+        // Reset calculate adherence inputs
+        const expectedTotal = document.getElementById('participationExpectedTotal');
+        const expectedAudio = document.getElementById('participationExpectedAudio');
+        const studyLength = document.getElementById('participationStudyLength');
+        if (expectedTotal) expectedTotal.value = '';
+        if (expectedAudio) expectedAudio.value = '';
+        if (studyLength) studyLength.value = '';
+        const calcTable = document.getElementById('participationCalculateTable');
+        if (calcTable) calcTable.innerHTML = '';
         
         // Show upload area and settings again
         const uploadArea = document.getElementById('uploadArea');
@@ -941,6 +1002,9 @@ class CSVCollator {
         
         // Show adherence table
         this.showParticipationTable(summaryData, audioSummaryData);
+
+        // Show calculate adherence table
+        this.showCalculateAdherenceTable('participation', summaryData, audioSummaryData);
 
         // Populate incentive table and reset to adherence tab
         if (incentiveSummaryData) {
@@ -1150,6 +1214,9 @@ class CSVCollator {
             
             this.showParticipationTable(filteredSummary, filteredAudio);
 
+            // Update calculate adherence table with filtered date range
+            this.showCalculateAdherenceTable('participation', filteredSummary, filteredAudio);
+
             // Update incentive table with filtered date range (and participant if selected)
             if (this.originalIncentiveSummaryData) {
                 let filteredIncentive = this.filterIncentiveByDateRange(this.originalIncentiveSummaryData, filteredDateRange);
@@ -1200,6 +1267,9 @@ class CSVCollator {
             }
             
             this.showAnalysisParticipationTable(filteredSummary, filteredAudio);
+
+            // Update calculate adherence table with filtered date range
+            this.showCalculateAdherenceTable('analysis', filteredSummary, filteredAudio);
 
             // Update incentive table with filtered date range (and participant if selected)
             if (this.originalAnalysisIncentiveSummaryData) {
@@ -1401,6 +1471,9 @@ class CSVCollator {
         
         // Show table with both filters applied
         this.showParticipationTable(finalSummary, finalAudio);
+
+        // Update calculate adherence table with same participant + date filters
+        this.showCalculateAdherenceTable('participation', finalSummary, finalAudio);
 
         // Update incentive table with same participant + date filters
         if (this.originalIncentiveSummaryData) {
@@ -1615,6 +1688,9 @@ class CSVCollator {
         // Show adherence table
         this.showAnalysisParticipationTable(summaryData, audioSummaryData);
 
+        // Show calculate adherence table
+        this.showCalculateAdherenceTable('analysis', summaryData, audioSummaryData);
+
         // Populate incentive table and reset to adherence tab
         if (incentiveSummaryData) {
             this.showIncentiveTable(incentiveSummaryData, summaryData, 'analysisIncentiveTable');
@@ -1717,31 +1793,348 @@ class CSVCollator {
         tableDiv.innerHTML = this.buildAdherenceTableHTML(summaryData, audioSummaryData);
     }
 
-    // Switch between the Adherence and Incentive table views for a given section.
+    // Switch between the Adherence, Calculate Adherence, and Incentive table views for a given section.
     // section: 'participation' | 'analysis'
-    // tab:     'adherence'     | 'incentive'
+    // tab:     'adherence' | 'calculate' | 'incentive'
     switchViewTab(section, tab) {
         const adherenceViewId  = section === 'analysis' ? 'analysisAdherenceView'       : 'participationAdherenceView';
+        const calculateSectId  = section === 'analysis' ? 'analysisCalculateSection'   : 'participationCalculateSection';
         const incentiveSectId  = section === 'analysis' ? 'analysisIncentiveSection'    : 'participationIncentiveSection';
         const adherenceTabId   = section === 'analysis' ? 'analysisAdherenceTab'        : 'participationAdherenceTab';
+        const calculateTabId   = section === 'analysis' ? 'analysisCalculateTab'        : 'participationCalculateTab';
         const incentiveTabId   = section === 'analysis' ? 'analysisIncentiveTab'        : 'participationIncentiveTab';
 
         const adherenceView = document.getElementById(adherenceViewId);
+        const calculateSect = document.getElementById(calculateSectId);
         const incentiveSect = document.getElementById(incentiveSectId);
         const adherenceBtn  = document.getElementById(adherenceTabId);
+        const calculateBtn  = document.getElementById(calculateTabId);
         const incentiveBtn  = document.getElementById(incentiveTabId);
+
+        if (adherenceView) adherenceView.style.display = 'none';
+        if (calculateSect) calculateSect.style.display = 'none';
+        if (incentiveSect) incentiveSect.style.display = 'none';
+        if (adherenceBtn)  adherenceBtn.classList.remove('active');
+        if (calculateBtn)  calculateBtn.classList.remove('active');
+        if (incentiveBtn)  incentiveBtn.classList.remove('active');
 
         if (tab === 'adherence') {
             if (adherenceView) adherenceView.style.display = 'block';
-            if (incentiveSect) incentiveSect.style.display = 'none';
             if (adherenceBtn)  adherenceBtn.classList.add('active');
-            if (incentiveBtn)  incentiveBtn.classList.remove('active');
+        } else if (tab === 'calculate') {
+            if (calculateSect) calculateSect.style.display = 'block';
+            if (calculateBtn)  calculateBtn.classList.add('active');
         } else {
-            if (adherenceView) adherenceView.style.display = 'none';
             if (incentiveSect) incentiveSect.style.display = 'block';
-            if (adherenceBtn)  adherenceBtn.classList.remove('active');
             if (incentiveBtn)  incentiveBtn.classList.add('active');
         }
+    }
+
+    formatAdherencePercent(actual, expected) {
+        if (!expected || expected <= 0) return null;
+        return (actual / expected) * 100;
+    }
+
+    adherencePercentClass(pct) {
+        if (pct === null || pct === undefined || isNaN(pct)) return '';
+        if (pct >= 80) return 'is-high';
+        if (pct >= 50) return 'is-mid';
+        return 'is-low';
+    }
+
+    formatAdherencePercentDisplay(pct) {
+        if (pct === null || pct === undefined || isNaN(pct)) return '—';
+        return `${pct.toFixed(1)}%`;
+    }
+
+    handleCalculateAdherenceInput(section, inputEl) {
+        const state = this.calculateAdherenceState[section];
+        if (!state) return;
+
+        if (inputEl.id.endsWith('ExpectedTotal')) {
+            state.expectedTotal = inputEl.value;
+        } else if (inputEl.id.endsWith('ExpectedAudio')) {
+            state.expectedAudio = inputEl.value;
+        } else if (inputEl.id.endsWith('StudyLength')) {
+            state.lengthOfStudy = inputEl.value;
+            // Changing study length re-applies auto-exclusion; drop forced includes
+            state.forceInclude = new Set();
+        }
+
+        this.renderCalculateAdherenceTable(section);
+    }
+
+    resetCalculateAdherenceState(section) {
+        const state = this.calculateAdherenceState[section];
+        if (!state) return;
+        state.expectedTotal = '';
+        state.expectedAudio = '';
+        state.lengthOfStudy = '';
+        state.excluded = new Set();
+        state.forceInclude = new Set();
+        state.summaryData = null;
+        state.audioSummaryData = null;
+    }
+
+    getParticipantFirstEntryDate(section, participantId) {
+        const original = section === 'analysis'
+            ? this.originalAnalysisSummaryData
+            : this.originalSummaryData;
+        const state = this.calculateAdherenceState[section];
+        const source = original || (state && state.summaryData);
+        if (!source) return null;
+
+        const participant = source.find(p => String(p.ParticipantID) === String(participantId));
+        if (!participant) return null;
+
+        const entryDates = Object.keys(participant)
+            .filter(key => /^\d{4}-\d{2}-\d{2}$/.test(key) && (participant[key] || 0) > 0)
+            .sort();
+
+        return entryDates.length > 0 ? entryDates[0] : null;
+    }
+
+    getStudyDaysElapsed(firstDateStr) {
+        if (!firstDateStr || !/^\d{4}-\d{2}-\d{2}$/.test(firstDateStr)) return null;
+
+        const [year, month, day] = firstDateStr.split('-').map(Number);
+        const firstUtc = Date.UTC(year, month - 1, day);
+        const now = new Date();
+        const todayUtc = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+        return Math.floor((todayUtc - firstUtc) / 86400000) + 1;
+    }
+
+    isParticipantStudyIncomplete(section, participantId) {
+        const state = this.calculateAdherenceState[section];
+        if (!state) return false;
+
+        const length = parseFloat(state.lengthOfStudy);
+        if (isNaN(length) || length <= 0) return false;
+
+        const firstDate = this.getParticipantFirstEntryDate(section, participantId);
+        if (!firstDate) return true;
+
+        const daysElapsed = this.getStudyDaysElapsed(firstDate);
+        if (daysElapsed === null) return true;
+
+        return daysElapsed < length;
+    }
+
+    isParticipantIncludedInAdherence(section, participantId) {
+        const state = this.calculateAdherenceState[section];
+        if (!state) return true;
+
+        const pid = String(participantId);
+        if (state.forceInclude.has(pid)) return true;
+        if (state.excluded.has(pid)) return false;
+        if (this.isParticipantStudyIncomplete(section, pid)) return false;
+        return true;
+    }
+
+    handleCalculateAdherenceToggle(section, participantId, included) {
+        const state = this.calculateAdherenceState[section];
+        if (!state) return;
+
+        const pid = String(participantId);
+        const incomplete = this.isParticipantStudyIncomplete(section, pid);
+
+        if (included) {
+            state.excluded.delete(pid);
+            if (incomplete) {
+                state.forceInclude.add(pid);
+            } else {
+                state.forceInclude.delete(pid);
+            }
+        } else {
+            state.forceInclude.delete(pid);
+            state.excluded.add(pid);
+        }
+
+        this.renderCalculateAdherenceTable(section);
+    }
+
+    showCalculateAdherenceTable(section, summaryData, audioSummaryData) {
+        const state = this.calculateAdherenceState[section];
+        if (!state) return;
+
+        state.summaryData = summaryData;
+        state.audioSummaryData = audioSummaryData;
+
+        // Sync input fields with stored values
+        const prefix = section === 'analysis' ? 'analysis' : 'participation';
+        const expectedTotalInput = document.getElementById(`${prefix}ExpectedTotal`);
+        const expectedAudioInput = document.getElementById(`${prefix}ExpectedAudio`);
+        const studyLengthInput = document.getElementById(`${prefix}StudyLength`);
+        if (expectedTotalInput && expectedTotalInput.value !== state.expectedTotal) {
+            expectedTotalInput.value = state.expectedTotal;
+        }
+        if (expectedAudioInput && expectedAudioInput.value !== state.expectedAudio) {
+            expectedAudioInput.value = state.expectedAudio;
+        }
+        if (studyLengthInput && studyLengthInput.value !== state.lengthOfStudy) {
+            studyLengthInput.value = state.lengthOfStudy;
+        }
+
+        this.renderCalculateAdherenceTable(section);
+    }
+
+    renderCalculateAdherenceTable(section) {
+        const state = this.calculateAdherenceState[section];
+        const tableId = section === 'analysis' ? 'analysisCalculateTable' : 'participationCalculateTable';
+        const tableDiv = document.getElementById(tableId);
+        if (!state || !tableDiv) return;
+
+        const summaryData = state.summaryData;
+        const audioSummaryData = state.audioSummaryData;
+
+        if (!summaryData || summaryData.length === 0) {
+            tableDiv.innerHTML = '<p>No participation data available.</p>';
+            return;
+        }
+
+        const expectedTotal = parseFloat(state.expectedTotal);
+        const expectedAudio = parseFloat(state.expectedAudio);
+        const studyLength = parseFloat(state.lengthOfStudy);
+        const hasExpectedTotal = !isNaN(expectedTotal) && expectedTotal > 0;
+        const hasExpectedAudio = !isNaN(expectedAudio) && expectedAudio > 0;
+        const hasStudyLength = !isNaN(studyLength) && studyLength > 0;
+
+        const dateRange = Object.keys(summaryData[0] || {})
+            .filter(key => {
+                if (key === 'ParticipantID' || key === 'TotalEntries' || key === 'Incentive') {
+                    return false;
+                }
+                if (state.strictDateFilter) {
+                    return /^\d{4}-\d{2}-\d{2}$/.test(key);
+                }
+                return true;
+            })
+            .sort()
+            .reverse();
+
+        const audioByParticipant = {};
+        if (audioSummaryData) {
+            audioSummaryData.forEach(participant => {
+                audioByParticipant[participant.ParticipantID] = participant;
+            });
+        }
+
+        let tableHTML = '<table><thead><tr>';
+        tableHTML += '<th title="Include in overall study adherence">Include</th>';
+        tableHTML += '<th>Participant ID</th>';
+        tableHTML += '<th>Total Entries</th>';
+        tableHTML += '<th>Total Adherence</th>';
+        tableHTML += '<th>Voice Diaries</th>';
+        tableHTML += '<th>Audio Adherence</th>';
+        tableHTML += '<th>Total Compensation</th>';
+
+        dateRange.forEach(date => {
+            const formatted = this.formatDateForTable(date);
+            tableHTML += `<th><div class="table-day-of-week">${formatted.dayOfWeek}</div><div class="table-date">${formatted.dateStr}</div></th>`;
+        });
+
+        tableHTML += '</tr></thead><tbody>';
+
+        let includedCount = 0;
+        let sumActualTotal = 0;
+        let sumActualAudio = 0;
+        let incompleteCount = 0;
+
+        summaryData.forEach(participant => {
+            const pid = String(participant.ParticipantID);
+            const incomplete = this.isParticipantStudyIncomplete(section, pid);
+            const included = this.isParticipantIncludedInAdherence(section, pid);
+            const firstEntryDate = this.getParticipantFirstEntryDate(section, pid);
+            const daysElapsed = firstEntryDate ? this.getStudyDaysElapsed(firstEntryDate) : null;
+            const audioParticipant = audioByParticipant[participant.ParticipantID];
+            const voiceDiaries = audioParticipant ? (audioParticipant.TotalTextAudio || 0) : 0;
+            const totalEntries = participant.TotalEntries || 0;
+            const compensation = participant.Incentive !== null && participant.Incentive !== undefined
+                ? participant.Incentive
+                : '-';
+
+            const totalPct = hasExpectedTotal ? this.formatAdherencePercent(totalEntries, expectedTotal) : null;
+            const audioPct = hasExpectedAudio ? this.formatAdherencePercent(voiceDiaries, expectedAudio) : null;
+
+            if (incomplete && !included) incompleteCount += 1;
+
+            if (included) {
+                includedCount += 1;
+                sumActualTotal += totalEntries;
+                sumActualAudio += voiceDiaries;
+            }
+
+            let includeTitle = 'Include in overall study adherence';
+            if (hasStudyLength) {
+                if (!firstEntryDate) {
+                    includeTitle = 'No submissions yet — study not started';
+                } else if (incomplete) {
+                    includeTitle = `Study in progress: day ${daysElapsed} of ${studyLength} (started ${firstEntryDate})`;
+                } else {
+                    includeTitle = `Study complete: day ${daysElapsed} of ${studyLength} (started ${firstEntryDate})`;
+                }
+            }
+
+            const rowClass = included ? '' : ' class="calc-excluded"';
+            tableHTML += `<tr${rowClass}>`;
+            tableHTML += `<td class="calc-include-cell"><input type="checkbox" class="calc-adherence-include" data-section="${section}" data-participant-id="${pid}" title="${includeTitle}" ${included ? 'checked' : ''} /></td>`;
+            tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
+            tableHTML += `<td class="entry-count">${totalEntries}</td>`;
+            tableHTML += `<td class="adherence-pct ${this.adherencePercentClass(totalPct)}">${this.formatAdherencePercentDisplay(totalPct)}</td>`;
+            tableHTML += `<td class="voice-diaries-count">${voiceDiaries}</td>`;
+            tableHTML += `<td class="adherence-pct ${this.adherencePercentClass(audioPct)}">${this.formatAdherencePercentDisplay(audioPct)}</td>`;
+            tableHTML += `<td class="total-compensation">${compensation}</td>`;
+
+            dateRange.forEach(date => {
+                const count = participant[date] || 0;
+                const className = count > 0 ? 'daily-count has-entries' : 'daily-count';
+                tableHTML += `<td class="${className}">${count}</td>`;
+            });
+
+            tableHTML += '</tr>';
+        });
+
+        tableHTML += '</tbody></table>';
+
+        const overallTotalPct = hasExpectedTotal && includedCount > 0
+            ? this.formatAdherencePercent(sumActualTotal, expectedTotal * includedCount)
+            : null;
+        const overallAudioPct = hasExpectedAudio && includedCount > 0
+            ? this.formatAdherencePercent(sumActualAudio, expectedAudio * includedCount)
+            : null;
+        const excludedCount = summaryData.length - includedCount;
+
+        let summaryNote = 'All visible participants included in overall calculation.';
+        if (!hasExpectedTotal && !hasExpectedAudio) {
+            summaryNote = 'Enter expected entry counts above to calculate adherence.';
+        } else if (excludedCount > 0) {
+            const incompleteNote = hasStudyLength && incompleteCount > 0
+                ? ` ${incompleteCount} still mid-study (auto-unchecked).`
+                : '';
+            summaryNote = `${excludedCount} participant${excludedCount === 1 ? '' : 's'} excluded from overall calculation.${incompleteNote}`;
+        } else if (hasStudyLength) {
+            summaryNote = 'All visible participants have completed the study period and are included.';
+        }
+
+        tableHTML += `
+            <div class="calc-adherence-summary">
+                <div class="calc-adherence-summary-item">
+                    <span class="calc-adherence-summary-label">Overall Total Adherence</span>
+                    <span class="calc-adherence-summary-value">${this.formatAdherencePercentDisplay(overallTotalPct)}</span>
+                </div>
+                <div class="calc-adherence-summary-item">
+                    <span class="calc-adherence-summary-label">Overall Audio Adherence</span>
+                    <span class="calc-adherence-summary-value">${this.formatAdherencePercentDisplay(overallAudioPct)}</span>
+                </div>
+                <div class="calc-adherence-summary-item">
+                    <span class="calc-adherence-summary-label">Included Participants</span>
+                    <span class="calc-adherence-summary-value">${includedCount} / ${summaryData.length}</span>
+                </div>
+                <p class="calc-adherence-summary-note">${summaryNote}</p>
+            </div>
+        `;
+
+        tableDiv.innerHTML = tableHTML;
     }
 
     // Filter incentive summary data to a subset of date columns
@@ -1904,6 +2297,9 @@ class CSVCollator {
         
         this.showAnalysisParticipationTable(filteredSummary, filteredAudioSummary);
 
+        // Update calculate adherence table with same participant filter
+        this.showCalculateAdherenceTable('analysis', filteredSummary, filteredAudioSummary);
+
         // Update incentive table with same participant filter
         if (this.originalAnalysisIncentiveSummaryData) {
             let filteredIncentive = this.originalAnalysisIncentiveSummaryData;
@@ -1972,17 +2368,30 @@ class CSVCollator {
         this.originalAnalysisSummaryData = null;
         this.originalAnalysisAudioSummaryData = null;
         this.originalAnalysisIncentiveSummaryData = null;
+        this.resetCalculateAdherenceState('analysis');
         
         document.getElementById('analysisFileInput').value = '';
         document.getElementById('analysisActionButtons').style.display = 'none';
         document.getElementById('analysisResults').style.display = 'none';
         document.getElementById('analysisIncentiveSection').style.display = 'none';
+        const analysisCalculateSection = document.getElementById('analysisCalculateSection');
+        if (analysisCalculateSection) analysisCalculateSection.style.display = 'none';
         document.getElementById('analysisFileList').innerHTML = '';
         document.getElementById('analysisParticipantSelect').innerHTML = '<option value="all">All Participants</option>';
         
         // Reset date filter
         const analysisDateFilter = document.getElementById('analysisDateFilter');
         if (analysisDateFilter) analysisDateFilter.value = 'all';
+
+        // Reset calculate adherence inputs
+        const expectedTotal = document.getElementById('analysisExpectedTotal');
+        const expectedAudio = document.getElementById('analysisExpectedAudio');
+        const studyLength = document.getElementById('analysisStudyLength');
+        if (expectedTotal) expectedTotal.value = '';
+        if (expectedAudio) expectedAudio.value = '';
+        if (studyLength) studyLength.value = '';
+        const calcTable = document.getElementById('analysisCalculateTable');
+        if (calcTable) calcTable.innerHTML = '';
         
         // Show upload area again
         const analysisUploadArea = document.getElementById('analysisUploadArea');
