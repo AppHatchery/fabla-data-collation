@@ -75,6 +75,33 @@ class CSVCollator {
         };
     }
 
+    // Earliest YYYY-MM-DD column with count > 0 on a participant summary row
+    getFirstEntryDateFromRow(participant) {
+        if (!participant) return null;
+        const entryDates = Object.keys(participant)
+            .filter(key => /^\d{4}-\d{2}-\d{2}$/.test(key) && (participant[key] || 0) > 0)
+            .sort();
+        return entryDates.length > 0 ? entryDates[0] : null;
+    }
+
+    buildFirstEntryDateMap(summaryData) {
+        const map = {};
+        (summaryData || []).forEach(participant => {
+            map[String(participant.ParticipantID)] = this.getFirstEntryDateFromRow(participant);
+        });
+        return map;
+    }
+
+    // Days before a participant's first entry render blank instead of 0
+    renderDailyCountCell(count, date, firstEntryDate) {
+        if (!firstEntryDate || date < firstEntryDate) {
+            return '<td class="daily-count"></td>';
+        }
+        const n = count || 0;
+        const className = n > 0 ? 'daily-count has-entries' : 'daily-count';
+        return `<td class="${className}">${n}</td>`;
+    }
+
     setupEventListeners() {
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
@@ -1282,7 +1309,11 @@ class CSVCollator {
         }
     }
 
-    buildAdherenceTableHTML(summaryData, audioSummaryData, { strictDateFilter = false } = {}) {
+    buildAdherenceTableHTML(summaryData, audioSummaryData, {
+        strictDateFilter = false,
+        firstEntryMap = null,
+        audioFirstEntryMap = null
+    } = {}) {
         const dateRange = Object.keys(summaryData[0] || {})
             .filter(key => {
                 if (key === 'ParticipantID' || key === 'TotalEntries' || key === 'Incentive') {
@@ -1303,6 +1334,9 @@ class CSVCollator {
             });
         }
 
+        const resolvedFirstEntryMap = firstEntryMap || this.buildFirstEntryDateMap(summaryData);
+        const resolvedAudioFirstEntryMap = audioFirstEntryMap || this.buildFirstEntryDateMap(audioSummaryData);
+
         let tableHTML = '<table><thead><tr>';
         tableHTML += '<th>Participant ID</th>';
         tableHTML += '<th>Total Entries</th>';
@@ -1322,6 +1356,8 @@ class CSVCollator {
             const compensation = participant.Incentive !== null && participant.Incentive !== undefined
                 ? participant.Incentive
                 : '-';
+            const firstEntryDate = resolvedFirstEntryMap[String(participant.ParticipantID)]
+                || this.getFirstEntryDateFromRow(participant);
 
             tableHTML += '<tr>';
             tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
@@ -1330,9 +1366,7 @@ class CSVCollator {
             tableHTML += `<td class="total-compensation">${compensation}</td>`;
 
             dateRange.forEach(date => {
-                const count = participant[date] || 0;
-                const className = count > 0 ? 'daily-count has-entries' : 'daily-count';
-                tableHTML += `<td class="${className}">${count}</td>`;
+                tableHTML += this.renderDailyCountCell(participant[date] || 0, date, firstEntryDate);
             });
 
             tableHTML += '</tr>';
@@ -1354,14 +1388,15 @@ class CSVCollator {
             tableHTML += '</tr></thead><tbody>';
 
             audioSummaryData.forEach(participant => {
+                const firstAudioDate = resolvedAudioFirstEntryMap[String(participant.ParticipantID)]
+                    || this.getFirstEntryDateFromRow(participant);
+
                 tableHTML += '<tr>';
                 tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
                 tableHTML += `<td class="voice-diaries-count">${participant.TotalTextAudio || 0}</td>`;
 
                 dateRange.forEach(date => {
-                    const count = participant[date] || 0;
-                    const className = count > 0 ? 'daily-count has-entries' : 'daily-count';
-                    tableHTML += `<td class="${className}">${count}</td>`;
+                    tableHTML += this.renderDailyCountCell(participant[date] || 0, date, firstAudioDate);
                 });
 
                 tableHTML += '</tr>';
@@ -1381,7 +1416,13 @@ class CSVCollator {
             return;
         }
 
-        tableDiv.innerHTML = this.buildAdherenceTableHTML(summaryData, audioSummaryData, { strictDateFilter: true });
+        const firstEntryMap = this.buildFirstEntryDateMap(this.originalSummaryData || summaryData);
+        const audioFirstEntryMap = this.buildFirstEntryDateMap(this.originalAudioSummaryData || audioSummaryData);
+        tableDiv.innerHTML = this.buildAdherenceTableHTML(summaryData, audioSummaryData, {
+            strictDateFilter: true,
+            firstEntryMap,
+            audioFirstEntryMap
+        });
     }
 
     downloadParticipationCSV() {
@@ -1790,7 +1831,12 @@ class CSVCollator {
             return;
         }
 
-        tableDiv.innerHTML = this.buildAdherenceTableHTML(summaryData, audioSummaryData);
+        const firstEntryMap = this.buildFirstEntryDateMap(this.originalAnalysisSummaryData || summaryData);
+        const audioFirstEntryMap = this.buildFirstEntryDateMap(this.originalAnalysisAudioSummaryData || audioSummaryData);
+        tableDiv.innerHTML = this.buildAdherenceTableHTML(summaryData, audioSummaryData, {
+            firstEntryMap,
+            audioFirstEntryMap
+        });
     }
 
     // Switch between the Adherence, Calculate Adherence, and Incentive table views for a given section.
@@ -1885,13 +1931,7 @@ class CSVCollator {
         if (!source) return null;
 
         const participant = source.find(p => String(p.ParticipantID) === String(participantId));
-        if (!participant) return null;
-
-        const entryDates = Object.keys(participant)
-            .filter(key => /^\d{4}-\d{2}-\d{2}$/.test(key) && (participant[key] || 0) > 0)
-            .sort();
-
-        return entryDates.length > 0 ? entryDates[0] : null;
+        return this.getFirstEntryDateFromRow(participant);
     }
 
     getStudyDaysElapsed(firstDateStr) {
@@ -2086,9 +2126,7 @@ class CSVCollator {
             tableHTML += `<td class="total-compensation">${compensation}</td>`;
 
             dateRange.forEach(date => {
-                const count = participant[date] || 0;
-                const className = count > 0 ? 'daily-count has-entries' : 'daily-count';
-                tableHTML += `<td class="${className}">${count}</td>`;
+                tableHTML += this.renderDailyCountCell(participant[date] || 0, date, firstEntryDate);
             });
 
             tableHTML += '</tr>';
@@ -2203,6 +2241,11 @@ class CSVCollator {
             });
         }
 
+        const originalForFirstEntry = containerId && containerId.includes('analysis')
+            ? this.originalAnalysisSummaryData
+            : this.originalSummaryData;
+        const firstEntryMap = this.buildFirstEntryDateMap(originalForFirstEntry || summaryData);
+
         // Compute global min/max across visible participants for colour scaling
         const allNums = visibleParticipants.flatMap(p =>
             dateRange.map(d => {
@@ -2239,12 +2282,22 @@ class CSVCollator {
         tableHTML += '</tr></thead><tbody>';
 
         visibleParticipants.forEach(participant => {
+            const firstEntryDate = firstEntryMap[String(participant.ParticipantID)]
+                || this.getFirstEntryDateFromRow(
+                    (summaryData || []).find(p => String(p.ParticipantID) === String(participant.ParticipantID))
+                );
+
             tableHTML += '<tr>';
             tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
             const finalIncentive = incentiveMap[participant.ParticipantID];
             tableHTML += `<td class="total-compensation">${finalIncentive !== null && finalIncentive !== undefined ? finalIncentive : '-'}</td>`;
 
             dateRange.forEach(date => {
+                if (!firstEntryDate || date < firstEntryDate) {
+                    tableHTML += `<td class="incentive-cell"></td>`;
+                    return;
+                }
+
                 const val = participant[date];
                 const diaryCount = (diaryMap[participant.ParticipantID] || {})[date] || 0;
                 const tooltip = `${diaryCount} ${diaryCount === 1 ? 'diary' : 'diaries'} completed`;
