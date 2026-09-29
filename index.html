@@ -706,10 +706,20 @@
             min-width: 150px;
         }
 
-        .participant-filter select:focus {
+        .participant-filter select:focus,
+        .participant-filter input[type="date"]:focus {
             outline: none;
             border-color: #3b82f6;
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .participant-filter input[type="date"] {
+            padding: 6px 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            background: white;
+            color: #1e293b;
         }
 
         .chart-container {
@@ -1761,6 +1771,12 @@
                                     <option value="90">3 months</option>
                                 </select>
                             </div>
+                            <div class="participant-filter">
+                                <label for="participationRangeStart">From</label>
+                                <input type="date" id="participationRangeStart" />
+                                <label for="participationRangeEnd">To</label>
+                                <input type="date" id="participationRangeEnd" />
+                            </div>
                         </div>
                     </div>
                     <div class="scroll-indicator">← Scroll horizontally to see all available dates →</div>
@@ -1868,6 +1884,12 @@
                                         <option value="60">2 months</option>
                                         <option value="90">3 months</option>
                                     </select>
+                                </div>
+                                <div class="participant-filter">
+                                    <label for="analysisRangeStart">From</label>
+                                    <input type="date" id="analysisRangeStart" />
+                                    <label for="analysisRangeEnd">To</label>
+                                    <input type="date" id="analysisRangeEnd" />
                                 </div>
                             </div>
                         </div>

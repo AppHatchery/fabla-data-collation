@@ -26,6 +26,8 @@ class CSVCollator {
                 expectedTotal: '',
                 expectedAudio: '',
                 lengthOfStudy: '',
+                rangeStart: '',
+                rangeEnd: '',
                 excluded: new Set(),
                 forceInclude: new Set(),
                 summaryData: null,
@@ -36,6 +38,8 @@ class CSVCollator {
                 expectedTotal: '',
                 expectedAudio: '',
                 lengthOfStudy: '',
+                rangeStart: '',
+                rangeEnd: '',
                 excluded: new Set(),
                 forceInclude: new Set(),
                 summaryData: null,
@@ -175,16 +179,32 @@ class CSVCollator {
             if (e.target && e.target.id === 'analysisIncentiveTab')        this.switchViewTab('analysis', 'incentive');
         });
 
-        // Calculate Adherence expected-entry / study-length inputs
-        document.addEventListener('input', (e) => {
+        // Calculate Adherence expected-entry / study-length / date-range inputs
+        const onCalculateAdherenceField = (e) => {
             if (!e.target) return;
-            if (e.target.id === 'participationExpectedTotal' || e.target.id === 'participationExpectedAudio' || e.target.id === 'participationStudyLength') {
+            const participationFields = [
+                'participationExpectedTotal',
+                'participationExpectedAudio',
+                'participationStudyLength',
+                'participationRangeStart',
+                'participationRangeEnd'
+            ];
+            const analysisFields = [
+                'analysisExpectedTotal',
+                'analysisExpectedAudio',
+                'analysisStudyLength',
+                'analysisRangeStart',
+                'analysisRangeEnd'
+            ];
+            if (participationFields.includes(e.target.id)) {
                 this.handleCalculateAdherenceInput('participation', e.target);
             }
-            if (e.target.id === 'analysisExpectedTotal' || e.target.id === 'analysisExpectedAudio' || e.target.id === 'analysisStudyLength') {
+            if (analysisFields.includes(e.target.id)) {
                 this.handleCalculateAdherenceInput('analysis', e.target);
             }
-        });
+        };
+        document.addEventListener('input', onCalculateAdherenceField);
+        document.addEventListener('change', onCalculateAdherenceField);
 
         // Calculate Adherence include/exclude checkboxes
         document.addEventListener('change', (e) => {
@@ -908,9 +928,13 @@ class CSVCollator {
         const expectedTotal = document.getElementById('participationExpectedTotal');
         const expectedAudio = document.getElementById('participationExpectedAudio');
         const studyLength = document.getElementById('participationStudyLength');
+        const rangeStart = document.getElementById('participationRangeStart');
+        const rangeEnd = document.getElementById('participationRangeEnd');
         if (expectedTotal) expectedTotal.value = '';
         if (expectedAudio) expectedAudio.value = '';
         if (studyLength) studyLength.value = '';
+        if (rangeStart) rangeStart.value = '';
+        if (rangeEnd) rangeEnd.value = '';
         const calcTable = document.getElementById('participationCalculateTable');
         if (calcTable) calcTable.innerHTML = '';
         
@@ -1139,6 +1163,40 @@ class CSVCollator {
         });
     }
 
+    // Preset window (last N days) intersected with the chart From/To inputs
+    getActiveDates(section, allDates) {
+        const presetId = section === 'analysis' ? 'analysisDateFilter' : 'participationDateFilter';
+        const preset = document.getElementById(presetId);
+        const selectedDays = preset && preset.value ? preset.value : 'all';
+        let dates = this.getFilteredDateRange(allDates, selectedDays);
+
+        const state = this.calculateAdherenceState[section];
+        const start = state?.rangeStart || '';
+        const end = state?.rangeEnd || '';
+        if (start && end && start > end) return [];
+        if (!start && !end) return dates;
+
+        return dates.filter(date => {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+            if (start && date < start) return false;
+            if (end && date > end) return false;
+            return true;
+        });
+    }
+
+    collectSectionDates(summaryData) {
+        return Object.keys(summaryData[0] || {})
+            .filter(key => key !== 'ParticipantID' && key !== 'TotalEntries' && key !== 'Incentive' && /^\d{4}-\d{2}-\d{2}$/.test(key))
+            .sort()
+            .reverse();
+    }
+
+    restoreSelectValue(select, value) {
+        if (!select || !value) return;
+        const hasOption = Array.from(select.options).some(option => option.value === value);
+        if (hasOption) select.value = value;
+    }
+
     // Filter summary data by date range and remove participants with no data
     filterDataByDateRange(summaryData, audioSummaryData, dateRange) {
         // Filter summary data
@@ -1153,6 +1211,7 @@ class CSVCollator {
             dateRange.forEach(date => {
                 filtered[date] = participant[date] || 0;
             });
+            filtered.TotalEntries = dateRange.reduce((sum, date) => sum + (filtered[date] || 0), 0);
             
             return filtered;
         }).filter(participant => {
@@ -1173,6 +1232,7 @@ class CSVCollator {
                 dateRange.forEach(date => {
                     filtered[date] = participant[date] || 0;
                 });
+                filtered.TotalTextAudio = dateRange.reduce((sum, date) => sum + (filtered[date] || 0), 0);
                 
                 return filtered;
             }).filter(participant => {
@@ -1184,127 +1244,102 @@ class CSVCollator {
         return { filteredSummary, filteredAudio };
     }
 
-    // Apply date filter and update display
+    // Apply the chart date preset and From/To range, then refresh the chart and every table
     filterByDateRange(event) {
-        // Check which section is active - main participation or analysis
+        const targetId = event && event.target ? event.target.id : '';
         const participationResults = document.getElementById('participationResults');
         const analysisResults = document.getElementById('analysisResults');
-        
-        // Get the dateFilter from the event target, or fall back to the active section's filter
-        const isAnalysisFallback = analysisResults && analysisResults.style.display !== 'none';
-        const dateFilter = (event && event.target)
-            ? event.target
-            : document.getElementById(isAnalysisFallback ? 'analysisDateFilter' : 'participationDateFilter');
-        const selectedDays = dateFilter && dateFilter.value ? dateFilter.value : 'all';
-        
-        // Determine which section is active based on visibility
-        const isMainParticipation = participationResults && participationResults.style.display !== 'none';
-        const isAnalysis = analysisResults && analysisResults.style.display !== 'none';
-        
+        const targetIsAnalysis = targetId.startsWith('analysis');
+        const targetIsParticipation = targetId.startsWith('participation') || targetId === 'participantSelect';
+
+        const isMainParticipation = targetIsParticipation || (
+            !targetIsAnalysis && participationResults && participationResults.style.display !== 'none'
+        );
+        const isAnalysis = targetIsAnalysis || (
+            !targetIsParticipation && analysisResults && analysisResults.style.display !== 'none'
+        );
+
         if (isMainParticipation && this.originalSummaryData && this.originalSummaryData.length > 0) {
-            // Main participation section
-            // Get all available dates from original data
-            const allDates = Object.keys(this.originalSummaryData[0] || {})
-                .filter(key => {
-                    if (key === 'ParticipantID' || key === 'TotalEntries' || key === 'Incentive') {
-                        return false;
-                    }
-                    return /^\d{4}-\d{2}-\d{2}$/.test(key);
-                })
-                .sort()
-                .reverse();
-            
-            // Get filtered date range
-            const filteredDateRange = this.getFilteredDateRange(allDates, selectedDays);
-            
-            // Filter the data
+            const allDates = this.collectSectionDates(this.originalSummaryData);
+            const filteredDateRange = this.getActiveDates('participation', allDates);
+
             const { filteredSummary, filteredAudio } = this.filterDataByDateRange(
                 this.originalSummaryData,
                 this.originalAudioSummaryData,
                 filteredDateRange
             );
-            
-            // Update participant filter dropdown
-            this.populateParticipantFilter(filteredSummary);
-            
-            // Get current participant selection
+
             const participantSelect = document.getElementById('participantSelect');
             const selectedParticipant = participantSelect ? participantSelect.value : 'all';
-            
-            // Update chart and table
-            if (selectedParticipant === 'all') {
-                this.showParticipationChart(filteredSummary);
+            this.populateParticipantFilter(filteredSummary);
+            this.restoreSelectValue(participantSelect, selectedParticipant);
+
+            const activeParticipant = participantSelect ? participantSelect.value : 'all';
+            let viewSummary = filteredSummary;
+            let viewAudio = filteredAudio;
+            if (activeParticipant !== 'all') {
+                viewSummary = filteredSummary.filter(p => p.ParticipantID === activeParticipant);
+                viewAudio = filteredAudio ? filteredAudio.filter(p => p.ParticipantID === activeParticipant) : null;
+            }
+
+            if (activeParticipant === 'all') {
+                this.showParticipationChart(viewSummary);
             } else {
-                const chartData = this.participationAnalyzer.createParticipantChartData(filteredSummary, selectedParticipant);
+                const chartData = this.participationAnalyzer.createParticipantChartData(viewSummary, activeParticipant);
                 this.updateChartDisplay(chartData);
             }
-            
-            this.showParticipationTable(filteredSummary, filteredAudio);
 
-            // Update calculate adherence table with filtered date range
-            this.showCalculateAdherenceTable('participation', filteredSummary, filteredAudio);
+            this.showParticipationTable(viewSummary, viewAudio);
+            this.showCalculateAdherenceTable('participation', viewSummary, viewAudio);
 
-            // Update incentive table with filtered date range (and participant if selected)
             if (this.originalIncentiveSummaryData) {
                 let filteredIncentive = this.filterIncentiveByDateRange(this.originalIncentiveSummaryData, filteredDateRange);
-                if (selectedParticipant !== 'all') {
-                    filteredIncentive = filteredIncentive.filter(p => p.ParticipantID === selectedParticipant);
+                if (activeParticipant !== 'all') {
+                    filteredIncentive = filteredIncentive.filter(p => p.ParticipantID === activeParticipant);
                 }
-                this.showIncentiveTable(filteredIncentive, filteredSummary, 'participationIncentiveTable');
+                this.showIncentiveTable(filteredIncentive, viewSummary, 'participationIncentiveTable');
             }
         } else if (isAnalysis && this.originalAnalysisSummaryData && this.originalAnalysisSummaryData.length > 0) {
-            // Analysis section
             const summaryData = this.originalAnalysisSummaryData;
-            
-            // Get all available dates from data
-            const allDates = Object.keys(summaryData[0] || {})
-                .filter(key => {
-                    if (key === 'ParticipantID' || key === 'TotalEntries' || key === 'Incentive') {
-                        return false;
-                    }
-                    return /^\d{4}-\d{2}-\d{2}$/.test(key);
-                })
-                .sort()
-                .reverse();
-            
-            // Get filtered date range
-            const filteredDateRange = this.getFilteredDateRange(allDates, selectedDays);
-            
-            // Filter the data
+            const allDates = this.collectSectionDates(summaryData);
+            const filteredDateRange = this.getActiveDates('analysis', allDates);
+
             const { filteredSummary, filteredAudio } = this.filterDataByDateRange(
                 summaryData,
                 this.originalAnalysisAudioSummaryData,
                 filteredDateRange
             );
-            
-            // Update participant filter dropdown
-            this.populateAnalysisParticipantFilter(filteredSummary);
-            
-            // Get current participant selection
+
             const participantSelect = document.getElementById('analysisParticipantSelect');
             const selectedParticipant = participantSelect ? participantSelect.value : 'all';
-            
-            // Update chart and table
-            if (selectedParticipant === 'all') {
-                const chartData = this.participationAnalyzer.createChartData(filteredSummary);
+            this.populateAnalysisParticipantFilter(filteredSummary);
+            this.restoreSelectValue(participantSelect, selectedParticipant);
+
+            const activeParticipant = participantSelect ? participantSelect.value : 'all';
+            let viewSummary = filteredSummary;
+            let viewAudio = filteredAudio;
+            if (activeParticipant !== 'all') {
+                viewSummary = filteredSummary.filter(p => p.ParticipantID === activeParticipant);
+                viewAudio = filteredAudio ? filteredAudio.filter(p => p.ParticipantID === activeParticipant) : null;
+            }
+
+            if (activeParticipant === 'all') {
+                const chartData = this.participationAnalyzer.createChartData(viewSummary);
                 this.updateAnalysisChartDisplay(chartData);
             } else {
-                const chartData = this.participationAnalyzer.createParticipantChartData(filteredSummary, selectedParticipant);
+                const chartData = this.participationAnalyzer.createParticipantChartData(viewSummary, activeParticipant);
                 this.updateAnalysisChartDisplay(chartData);
             }
-            
-            this.showAnalysisParticipationTable(filteredSummary, filteredAudio);
 
-            // Update calculate adherence table with filtered date range
-            this.showCalculateAdherenceTable('analysis', filteredSummary, filteredAudio);
+            this.showAnalysisParticipationTable(viewSummary, viewAudio);
+            this.showCalculateAdherenceTable('analysis', viewSummary, viewAudio);
 
-            // Update incentive table with filtered date range (and participant if selected)
             if (this.originalAnalysisIncentiveSummaryData) {
                 let filteredIncentive = this.filterIncentiveByDateRange(this.originalAnalysisIncentiveSummaryData, filteredDateRange);
-                if (selectedParticipant !== 'all') {
-                    filteredIncentive = filteredIncentive.filter(p => p.ParticipantID === selectedParticipant);
+                if (activeParticipant !== 'all') {
+                    filteredIncentive = filteredIncentive.filter(p => p.ParticipantID === activeParticipant);
                 }
-                this.showIncentiveTable(filteredIncentive, filteredSummary, 'analysisIncentiveTable');
+                this.showIncentiveTable(filteredIncentive, viewSummary, 'analysisIncentiveTable');
             }
         }
     }
@@ -1312,7 +1347,8 @@ class CSVCollator {
     buildAdherenceTableHTML(summaryData, audioSummaryData, {
         strictDateFilter = false,
         firstEntryMap = null,
-        audioFirstEntryMap = null
+        audioFirstEntryMap = null,
+        incentiveSummary = null
     } = {}) {
         const dateRange = Object.keys(summaryData[0] || {})
             .filter(key => {
@@ -1341,7 +1377,7 @@ class CSVCollator {
         tableHTML += '<th>Participant ID</th>';
         tableHTML += '<th>Total Entries</th>';
         tableHTML += '<th>Voice Diaries</th>';
-        tableHTML += '<th>Total Compensation</th>';
+        tableHTML += '<th title="Amount earned in the selected dates: balance at the end of the period minus the balance already received before it">Total Compensation</th>';
 
         dateRange.forEach(date => {
             const formatted = this.formatDateForTable(date);
@@ -1352,18 +1388,24 @@ class CSVCollator {
 
         summaryData.forEach(participant => {
             const audioParticipant = audioByParticipant[participant.ParticipantID];
-            const voiceDiaries = audioParticipant ? (audioParticipant.TotalTextAudio || 0) : 0;
-            const compensation = participant.Incentive !== null && participant.Incentive !== undefined
-                ? participant.Incentive
-                : '-';
+            const voiceDiaries = audioParticipant ? this.sumCountsOnDates(audioParticipant, dateRange) : 0;
+            const totalEntries = this.sumCountsOnDates(participant, dateRange);
+            const incentiveRow = this.incentiveRowForParticipant(incentiveSummary, participant.ParticipantID);
+            const periodPay = incentiveSummary
+                ? this.periodCompensation(incentiveRow, dateRange)
+                : null;
+            const compensation = periodPay ? periodPay.display : (
+                participant.Incentive !== null && participant.Incentive !== undefined ? participant.Incentive : '-'
+            );
+            const compensationTitle = periodPay ? ` title="${this.escapeHtml(periodPay.title)}"` : '';
             const firstEntryDate = resolvedFirstEntryMap[String(participant.ParticipantID)]
                 || this.getFirstEntryDateFromRow(participant);
 
             tableHTML += '<tr>';
             tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
-            tableHTML += `<td class="entry-count">${participant.TotalEntries}</td>`;
+            tableHTML += `<td class="entry-count">${totalEntries}</td>`;
             tableHTML += `<td class="voice-diaries-count">${voiceDiaries}</td>`;
-            tableHTML += `<td class="total-compensation">${compensation}</td>`;
+            tableHTML += `<td class="total-compensation"${compensationTitle}>${this.escapeHtml(String(compensation))}</td>`;
 
             dateRange.forEach(date => {
                 tableHTML += this.renderDailyCountCell(participant[date] || 0, date, firstEntryDate);
@@ -1393,7 +1435,7 @@ class CSVCollator {
 
                 tableHTML += '<tr>';
                 tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
-                tableHTML += `<td class="voice-diaries-count">${participant.TotalTextAudio || 0}</td>`;
+                tableHTML += `<td class="voice-diaries-count">${this.sumCountsOnDates(participant, dateRange)}</td>`;
 
                 dateRange.forEach(date => {
                     tableHTML += this.renderDailyCountCell(participant[date] || 0, date, firstAudioDate);
@@ -1421,7 +1463,8 @@ class CSVCollator {
         tableDiv.innerHTML = this.buildAdherenceTableHTML(summaryData, audioSummaryData, {
             strictDateFilter: true,
             firstEntryMap,
-            audioFirstEntryMap
+            audioFirstEntryMap,
+            incentiveSummary: this.originalIncentiveSummaryData
         });
     }
 
@@ -1456,74 +1499,7 @@ class CSVCollator {
     }
 
     filterChartByParticipant() {
-        const participantSelect = document.getElementById('participantSelect');
-        const selectedParticipant = participantSelect.value;
-        
-        if (!this.originalSummaryData || this.originalSummaryData.length === 0) {
-            return;
-        }
-        
-        // Get current date filter
-        const dateFilter = document.getElementById('participationDateFilter');
-        const selectedDays = dateFilter ? dateFilter.value : 'all';
-        
-        // Get all available dates from original data
-        const allDates = Object.keys(this.originalSummaryData[0] || {})
-            .filter(key => {
-                if (key === 'ParticipantID' || key === 'TotalEntries' || key === 'Incentive') {
-                    return false;
-                }
-                return /^\d{4}-\d{2}-\d{2}$/.test(key);
-            })
-            .sort()
-            .reverse();
-        
-        // Get filtered date range
-        const filteredDateRange = this.getFilteredDateRange(allDates, selectedDays);
-        
-        // Filter the data by date range
-        const { filteredSummary, filteredAudio } = this.filterDataByDateRange(
-            this.originalSummaryData,
-            this.originalAudioSummaryData,
-            filteredDateRange
-        );
-        
-        // Now apply participant filter on date-filtered data
-        let finalSummary = filteredSummary;
-        let finalAudio = filteredAudio;
-        
-        if (selectedParticipant !== 'all') {
-            finalSummary = filteredSummary.filter(p => p.ParticipantID === selectedParticipant);
-            finalAudio = filteredAudio ? 
-                filteredAudio.filter(p => p.ParticipantID === selectedParticipant) : null;
-        }
-        
-        // Filter chart
-        let chartData;
-        if (selectedParticipant === 'all') {
-            chartData = this.participationAnalyzer.createChartData(finalSummary);
-        } else {
-            chartData = this.participationAnalyzer.createParticipantChartData(finalSummary, selectedParticipant);
-        }
-        
-        if (chartData) {
-            this.updateChartDisplay(chartData);
-        }
-        
-        // Show table with both filters applied
-        this.showParticipationTable(finalSummary, finalAudio);
-
-        // Update calculate adherence table with same participant + date filters
-        this.showCalculateAdherenceTable('participation', finalSummary, finalAudio);
-
-        // Update incentive table with same participant + date filters
-        if (this.originalIncentiveSummaryData) {
-            let filteredIncentive = this.filterIncentiveByDateRange(this.originalIncentiveSummaryData, filteredDateRange);
-            if (selectedParticipant !== 'all') {
-                filteredIncentive = filteredIncentive.filter(p => p.ParticipantID === selectedParticipant);
-            }
-            this.showIncentiveTable(filteredIncentive, finalSummary, 'participationIncentiveTable');
-        }
+        this.filterByDateRange({ target: { id: 'participantSelect' } });
     }
 
     updateChartDisplay(chartData) {
@@ -1835,7 +1811,8 @@ class CSVCollator {
         const audioFirstEntryMap = this.buildFirstEntryDateMap(this.originalAnalysisAudioSummaryData || audioSummaryData);
         tableDiv.innerHTML = this.buildAdherenceTableHTML(summaryData, audioSummaryData, {
             firstEntryMap,
-            audioFirstEntryMap
+            audioFirstEntryMap,
+            incentiveSummary: this.originalAnalysisIncentiveSummaryData
         });
     }
 
@@ -1905,6 +1882,14 @@ class CSVCollator {
             state.lengthOfStudy = inputEl.value;
             // Changing study length re-applies auto-exclusion; drop forced includes
             state.forceInclude = new Set();
+        } else if (inputEl.id.endsWith('RangeStart')) {
+            state.rangeStart = inputEl.value;
+            this.filterByDateRange({ target: inputEl });
+            return;
+        } else if (inputEl.id.endsWith('RangeEnd')) {
+            state.rangeEnd = inputEl.value;
+            this.filterByDateRange({ target: inputEl });
+            return;
         }
 
         this.renderCalculateAdherenceTable(section);
@@ -1916,10 +1901,103 @@ class CSVCollator {
         state.expectedTotal = '';
         state.expectedAudio = '';
         state.lengthOfStudy = '';
+        state.rangeStart = '';
+        state.rangeEnd = '';
         state.excluded = new Set();
         state.forceInclude = new Set();
         state.summaryData = null;
         state.audioSummaryData = null;
+    }
+
+    collectSummaryDateKeys(summaryData, strictDateFilter) {
+        const dates = new Set();
+        (summaryData || []).forEach(participant => {
+            Object.keys(participant).forEach(key => {
+                if (key === 'ParticipantID' || key === 'TotalEntries' || key === 'Incentive') return;
+                if (strictDateFilter && !/^\d{4}-\d{2}-\d{2}$/.test(key)) return;
+                dates.add(key);
+            });
+        });
+        return Array.from(dates).sort().reverse();
+    }
+
+    sumCountsOnDates(participant, dates) {
+        if (!participant) return 0;
+        return dates.reduce((sum, date) => sum + (Number(participant[date]) || 0), 0);
+    }
+
+    parseIncentiveAmount(raw) {
+        if (raw === null || raw === undefined || raw === '') return null;
+        const match = String(raw).trim().match(/^([^0-9-]*)(-?\d[\d,]*(?:\.\d+)?)(.*)$/);
+        if (!match) return null;
+        const num = parseFloat(match[2].replace(/,/g, ''));
+        if (isNaN(num)) return null;
+        return {
+            prefix: match[1],
+            suffix: match[3],
+            num,
+            decimals: (match[2].split('.')[1] || '').length
+        };
+    }
+
+    formatIncentiveAmount(amount, sample) {
+        const decimals = sample ? sample.decimals : 0;
+        const sign = amount < 0 ? '-' : '';
+        const prefix = sample ? sample.prefix : '';
+        const suffix = sample ? sample.suffix : '';
+        return `${sign}${prefix}${Math.abs(amount).toFixed(decimals)}${suffix}`;
+    }
+
+    // Amount earned in the visible window: balance at the end of the period minus the balance already received before it.
+    periodCompensation(incentiveRow, visibleDates) {
+        if (!incentiveRow) return null;
+        const windowDates = (visibleDates || [])
+            .filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date))
+            .sort();
+        if (windowDates.length === 0) return null;
+
+        const start = windowDates[0];
+        const end = windowDates[windowDates.length - 1];
+        const valuedDates = Object.keys(incentiveRow)
+            .filter(key => /^\d{4}-\d{2}-\d{2}$/.test(key))
+            .filter(key => {
+                const value = incentiveRow[key];
+                return value !== null && value !== undefined && value !== '';
+            })
+            .sort();
+
+        const beforeDate = valuedDates.filter(date => date < start).pop() || null;
+        const endDate = valuedDates.filter(date => date >= start && date <= end).pop() || null;
+        const baselineRaw = beforeDate ? incentiveRow[beforeDate] : null;
+        const endRaw = endDate ? incentiveRow[endDate] : null;
+        const endParsed = this.parseIncentiveAmount(endRaw);
+        const baseParsed = this.parseIncentiveAmount(baselineRaw);
+
+        if (!endParsed && !baseParsed) return null;
+
+        const sample = endParsed || baseParsed;
+        if (!endParsed) {
+            const display = this.formatIncentiveAmount(0, sample);
+            return {
+                display,
+                title: 'No incentive recorded in this period'
+            };
+        }
+
+        const baseline = baseParsed ? baseParsed.num : 0;
+        const diff = endParsed.num - baseline;
+        const decimals = Math.max(endParsed.decimals, baseParsed ? baseParsed.decimals : 0);
+        const display = this.formatIncentiveAmount(diff, { ...sample, decimals });
+        const baseLabel = baselineRaw === null || baselineRaw === undefined ? '0' : baselineRaw;
+        return {
+            display,
+            title: `${endRaw} at end of period − ${baseLabel} already received = ${display}`
+        };
+    }
+
+    incentiveRowForParticipant(incentiveSummary, participantId) {
+        if (!incentiveSummary) return null;
+        return incentiveSummary.find(row => String(row.ParticipantID) === String(participantId)) || null;
     }
 
     getParticipantFirstEntryDate(section, participantId) {
@@ -2005,6 +2083,8 @@ class CSVCollator {
         const expectedTotalInput = document.getElementById(`${prefix}ExpectedTotal`);
         const expectedAudioInput = document.getElementById(`${prefix}ExpectedAudio`);
         const studyLengthInput = document.getElementById(`${prefix}StudyLength`);
+        const rangeStartInput = document.getElementById(`${prefix}RangeStart`);
+        const rangeEndInput = document.getElementById(`${prefix}RangeEnd`);
         if (expectedTotalInput && expectedTotalInput.value !== state.expectedTotal) {
             expectedTotalInput.value = state.expectedTotal;
         }
@@ -2013,6 +2093,12 @@ class CSVCollator {
         }
         if (studyLengthInput && studyLengthInput.value !== state.lengthOfStudy) {
             studyLengthInput.value = state.lengthOfStudy;
+        }
+        if (rangeStartInput && rangeStartInput.value !== state.rangeStart) {
+            rangeStartInput.value = state.rangeStart;
+        }
+        if (rangeEndInput && rangeEndInput.value !== state.rangeEnd) {
+            rangeEndInput.value = state.rangeEnd;
         }
 
         this.renderCalculateAdherenceTable(section);
@@ -2028,7 +2114,7 @@ class CSVCollator {
         const audioSummaryData = state.audioSummaryData;
 
         if (!summaryData || summaryData.length === 0) {
-            tableDiv.innerHTML = '<p>No participation data available.</p>';
+            tableDiv.innerHTML = '<p>No participation data available for the selected dates.</p>';
             return;
         }
 
@@ -2039,18 +2125,12 @@ class CSVCollator {
         const hasExpectedAudio = !isNaN(expectedAudio) && expectedAudio > 0;
         const hasStudyLength = !isNaN(studyLength) && studyLength > 0;
 
-        const dateRange = Object.keys(summaryData[0] || {})
-            .filter(key => {
-                if (key === 'ParticipantID' || key === 'TotalEntries' || key === 'Incentive') {
-                    return false;
-                }
-                if (state.strictDateFilter) {
-                    return /^\d{4}-\d{2}-\d{2}$/.test(key);
-                }
-                return true;
-            })
-            .sort()
-            .reverse();
+        const dateRange = this.collectSummaryDateKeys(summaryData, state.strictDateFilter);
+
+        if (dateRange.length === 0) {
+            tableDiv.innerHTML = '<p>No dates fall in the selected range.</p>';
+            return;
+        }
 
         const audioByParticipant = {};
         if (audioSummaryData) {
@@ -2066,7 +2146,7 @@ class CSVCollator {
         tableHTML += '<th>Total Adherence</th>';
         tableHTML += '<th>Voice Diaries</th>';
         tableHTML += '<th>Audio Adherence</th>';
-        tableHTML += '<th>Total Compensation</th>';
+        tableHTML += '<th title="Amount earned in the selected dates: balance at the end of the period minus the balance already received before it">Total Compensation</th>';
 
         dateRange.forEach(date => {
             const formatted = this.formatDateForTable(date);
@@ -2087,11 +2167,15 @@ class CSVCollator {
             const firstEntryDate = this.getParticipantFirstEntryDate(section, pid);
             const daysElapsed = firstEntryDate ? this.getStudyDaysElapsed(firstEntryDate) : null;
             const audioParticipant = audioByParticipant[participant.ParticipantID];
-            const voiceDiaries = audioParticipant ? (audioParticipant.TotalTextAudio || 0) : 0;
-            const totalEntries = participant.TotalEntries || 0;
-            const compensation = participant.Incentive !== null && participant.Incentive !== undefined
-                ? participant.Incentive
-                : '-';
+            const voiceDiaries = this.sumCountsOnDates(audioParticipant, dateRange);
+            const totalEntries = this.sumCountsOnDates(participant, dateRange);
+            const incentiveSummary = section === 'analysis'
+                ? this.originalAnalysisIncentiveSummaryData
+                : this.originalIncentiveSummaryData;
+            const incentiveRow = this.incentiveRowForParticipant(incentiveSummary, participant.ParticipantID);
+            const periodPay = this.periodCompensation(incentiveRow, dateRange);
+            const compensation = periodPay ? periodPay.display : '-';
+            const compensationTitle = periodPay ? ` title="${this.escapeHtml(periodPay.title)}"` : '';
 
             const totalPct = hasExpectedTotal ? this.formatAdherencePercent(totalEntries, expectedTotal) : null;
             const audioPct = hasExpectedAudio ? this.formatAdherencePercent(voiceDiaries, expectedAudio) : null;
@@ -2123,7 +2207,7 @@ class CSVCollator {
             tableHTML += `<td class="adherence-pct ${this.adherencePercentClass(totalPct)}">${this.formatAdherencePercentDisplay(totalPct)}</td>`;
             tableHTML += `<td class="voice-diaries-count">${voiceDiaries}</td>`;
             tableHTML += `<td class="adherence-pct ${this.adherencePercentClass(audioPct)}">${this.formatAdherencePercentDisplay(audioPct)}</td>`;
-            tableHTML += `<td class="total-compensation">${compensation}</td>`;
+            tableHTML += `<td class="total-compensation"${compensationTitle}>${this.escapeHtml(String(compensation))}</td>`;
 
             dateRange.forEach(date => {
                 tableHTML += this.renderDailyCountCell(participant[date] || 0, date, firstEntryDate);
@@ -2226,18 +2310,13 @@ class CSVCollator {
 
         // Build lookup maps from adherence summaryData:
         //   diaryMap[pid][date]  → diary count (for tooltip)
-        //   incentiveMap[pid]    → final (most-recent) incentive string (for header column)
         const diaryMap = {};
-        const incentiveMap = {};
         if (summaryData) {
             summaryData.forEach(p => {
                 diaryMap[p.ParticipantID] = {};
                 dateRange.forEach(date => {
                     diaryMap[p.ParticipantID][date] = p[date] || 0;
                 });
-                if (p.Incentive !== null && p.Incentive !== undefined) {
-                    incentiveMap[p.ParticipantID] = p.Incentive;
-                }
             });
         }
 
@@ -2274,7 +2353,7 @@ class CSVCollator {
 
         let tableHTML = '<table><thead><tr>';
         tableHTML += '<th>Participant ID</th>';
-        tableHTML += '<th>Final Incentive</th>';
+        tableHTML += '<th title="Amount earned in the selected dates: balance at the end of the period minus the balance already received before it">Final Incentive</th>';
         dateRange.forEach(date => {
             const fmt = this.formatDateForTable(date);
             tableHTML += `<th><div class="table-day-of-week">${fmt.dayOfWeek}</div><div class="table-date">${fmt.dateStr}</div></th>`;
@@ -2289,8 +2368,14 @@ class CSVCollator {
 
             tableHTML += '<tr>';
             tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
-            const finalIncentive = incentiveMap[participant.ParticipantID];
-            tableHTML += `<td class="total-compensation">${finalIncentive !== null && finalIncentive !== undefined ? finalIncentive : '-'}</td>`;
+            const originalIncentives = containerId && containerId.includes('analysis')
+                ? this.originalAnalysisIncentiveSummaryData
+                : this.originalIncentiveSummaryData;
+            const fullIncentiveRow = this.incentiveRowForParticipant(originalIncentives, participant.ParticipantID) || participant;
+            const periodPay = this.periodCompensation(fullIncentiveRow, dateRange);
+            const compensationTitle = periodPay ? ` title="${this.escapeHtml(periodPay.title)}"` : '';
+            const compensation = periodPay ? periodPay.display : '-';
+            tableHTML += `<td class="total-compensation"${compensationTitle}>${this.escapeHtml(compensation)}</td>`;
 
             dateRange.forEach(date => {
                 if (!firstEntryDate || date < firstEntryDate) {
@@ -2319,48 +2404,7 @@ class CSVCollator {
     }
 
     filterAnalysisChartByParticipant() {
-        const participantSelect = document.getElementById('analysisParticipantSelect');
-        const selectedParticipant = participantSelect.value;
-        
-        if (!this.analysisParticipationData || !this.analysisParticipationData.summary) {
-            return;
-        }
-        
-        // Filter chart
-        let chartData;
-        if (selectedParticipant === 'all') {
-            chartData = this.participationAnalyzer.createChartData(this.analysisParticipationData.summary);
-        } else {
-            chartData = this.participationAnalyzer.createParticipantChartData(this.analysisParticipationData.summary, selectedParticipant);
-        }
-        
-        if (chartData) {
-            this.updateAnalysisChartDisplay(chartData);
-        }
-        
-        // Filter table
-        let filteredSummary = this.analysisParticipationData.summary;
-        let filteredAudioSummary = this.analysisParticipationData.audioSummary;
-        
-        if (selectedParticipant !== 'all') {
-            filteredSummary = this.analysisParticipationData.summary.filter(p => p.ParticipantID === selectedParticipant);
-            filteredAudioSummary = this.analysisParticipationData.audioSummary ? 
-                this.analysisParticipationData.audioSummary.filter(p => p.ParticipantID === selectedParticipant) : null;
-        }
-        
-        this.showAnalysisParticipationTable(filteredSummary, filteredAudioSummary);
-
-        // Update calculate adherence table with same participant filter
-        this.showCalculateAdherenceTable('analysis', filteredSummary, filteredAudioSummary);
-
-        // Update incentive table with same participant filter
-        if (this.originalAnalysisIncentiveSummaryData) {
-            let filteredIncentive = this.originalAnalysisIncentiveSummaryData;
-            if (selectedParticipant !== 'all') {
-                filteredIncentive = filteredIncentive.filter(p => p.ParticipantID === selectedParticipant);
-            }
-            this.showIncentiveTable(filteredIncentive, filteredSummary, 'analysisIncentiveTable');
-        }
+        this.filterByDateRange({ target: { id: 'analysisParticipantSelect' } });
     }
 
     updateAnalysisChartDisplay(chartData) {
@@ -2440,9 +2484,13 @@ class CSVCollator {
         const expectedTotal = document.getElementById('analysisExpectedTotal');
         const expectedAudio = document.getElementById('analysisExpectedAudio');
         const studyLength = document.getElementById('analysisStudyLength');
+        const rangeStart = document.getElementById('analysisRangeStart');
+        const rangeEnd = document.getElementById('analysisRangeEnd');
         if (expectedTotal) expectedTotal.value = '';
         if (expectedAudio) expectedAudio.value = '';
         if (studyLength) studyLength.value = '';
+        if (rangeStart) rangeStart.value = '';
+        if (rangeEnd) rangeEnd.value = '';
         const calcTable = document.getElementById('analysisCalculateTable');
         if (calcTable) calcTable.innerHTML = '';
         
