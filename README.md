@@ -13,7 +13,7 @@ A browser-based tool for aggregating Fabla research data. Upload multiple CSV fi
 - **🔧 ResponseID Deduplication**: Automatically removes duplicates based on ResponseID (keeps first occurrence)
 - **👁️ Data Preview**: Preview your merged data before downloading
 - **💾 Multiple Export Formats**: Download as CSV or Excel with automatic date stamping
-- **📝 Transcript Extraction**: Extract Date, Reference, Transcript, and Response columns for rows with Reference data, plus textaudio rows without a Reference
+- **📝 Transcript Extraction**: Extract Date, ParticipantID, Reference, Transcript, and Response columns for rows with Reference data, plus textaudio rows without a Reference
 - **🛠️ Advanced CSV Parsing**: Handles multiline fields and complex CSV structures
 
 ### Participation Analysis
@@ -48,7 +48,7 @@ A browser-based tool for aggregating Fabla research data. Upload multiple CSV fi
 3. **Process Data**: The tool processes your files and removes duplicates automatically.
 4. **Download Results**: 
    - **Download CSV/Excel**: Download your collated and deduplicated data as CSV or Excel format with automatic date stamping (e.g., `fabla_data_2024-09-24.csv`)
-   - **Download Transcripts**: Extract and download the Date, Reference, Transcript, and Response columns for rows that have Reference data, plus `textaudio` rows with no Reference (typed answers), whose Response is filled in. This creates a focused CSV file (e.g., `fabla_reference_transcript_2024-09-24.csv`) containing only relevant transcript entries.
+   - **Download Transcripts**: Extract and download the Date, ParticipantID, Reference, Transcript, and Response columns for rows that have Reference data, plus `textaudio` rows with no Reference (typed answers), whose Response is filled in. This creates a focused CSV file (e.g., `fabla_reference_transcript_2024-09-24.csv`) containing only relevant transcript entries.
 
 ### Participation Analysis Tool
 
