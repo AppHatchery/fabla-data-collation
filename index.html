@@ -1632,7 +1632,7 @@
                         <div class="tool-icon">📝</div>
                         <div class="tool-content">
                             <div class="tool-title">Download Transcripts</div>
-                            <div class="tool-description">Extract Date, Reference, and Transcript columns from your data.</div>
+                            <div class="tool-description">Extract Date, Reference, Transcript, and Response columns from your data.</div>
                         </div>
                     </button>
                     <button class="tool-button" id="cleaningTab" data-tool="cleaning">
@@ -1942,7 +1942,7 @@
                     <div class="upload-area" id="transcriptUploadArea">
                         <div class="upload-icon">📝</div>
                         <h3>Upload CSV for Transcript Extraction</h3>
-                        <p>Upload your CSV data to extract Date, Reference, and Transcript columns. Only rows with Reference data will be included.</p>
+                        <p>Upload your CSV data to extract Date, Reference, Transcript, and Response columns. Rows with Reference data are included, plus textaudio rows without a Reference (with their Response).</p>
                         <input type="file" id="transcriptFileInput" class="file-input" accept=".csv" multiple />
                     </div>
                     <div class="upload-error-message" id="transcriptUploadAreaError" hidden></div>

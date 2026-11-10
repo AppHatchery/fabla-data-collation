@@ -1,11 +1,24 @@
 /**
  * Reference & Transcript Extractor Module
- * Extracts Date, Reference, and Transcript columns from data where Reference has data
+ * Extracts Date, Reference, Transcript, and Response columns from data.
+ * Includes rows where Reference has data, plus textaudio rows without a
+ * Reference (typed answers), whose Response is included.
  */
 
 class ReferenceTranscriptExtractor {
     /**
-     * Extract Date, Reference, and Transcript columns from data
+     * Whether a row is a textaudio question answered without a reference file
+     * @param {Object} row - Row object
+     * @returns {boolean}
+     */
+    isTextAudioWithoutReference(row) {
+        const questionType = String(row['QuestionsType'] || '').trim().toLowerCase();
+        const reference = String(row['Reference'] || '').trim();
+        return questionType === 'textaudio' && reference.length === 0;
+    }
+
+    /**
+     * Extract Date, Reference, Transcript, and Response columns from data
      * @param {Array} data - Array of row objects to extract from
      * @param {Function} addMessage - Function to display messages (message, type)
      * @returns {Object|null} - Object with csvContent and rowCount if successful, null otherwise
@@ -18,26 +31,29 @@ class ReferenceTranscriptExtractor {
             return null;
         }
 
-        // Filter rows where Reference has data (not empty, null, or whitespace)
+        // Keep rows where Reference has data, or textaudio rows answered without a reference
         const filteredData = data.filter(row => {
-            const reference = row['Reference'] || '';
-            return reference.trim().length > 0;
+            const reference = String(row['Reference'] || '');
+            return reference.trim().length > 0 || this.isTextAudioWithoutReference(row);
         });
 
         if (filteredData.length === 0) {
             if (addMessage) {
-                addMessage('No rows found with Reference data.', 'warning');
+                addMessage('No rows found with Reference data or textaudio responses.', 'warning');
             }
             return null;
         }
 
-        // Extract Date, Reference, and Transcript columns
-        const columns = ['Date', 'Reference', 'Transcript'];
+        const columns = ['Date', 'Reference', 'Transcript', 'Response'];
         let csvContent = columns.join(',') + '\n';
 
         filteredData.forEach(row => {
+            const includeResponse = this.isTextAudioWithoutReference(row);
             const values = columns.map(col => {
-                const value = row[col] || '';
+                if (col === 'Response' && !includeResponse) {
+                    return '';
+                }
+                const value = String(row[col] || '');
                 // Escape quotes and wrap in quotes if contains comma, quote, or newline
                 if (value.includes(',') || value.includes('"') || value.includes('\n')) {
                     return '"' + value.replace(/"/g, '""') + '"';
@@ -71,7 +87,7 @@ class ReferenceTranscriptExtractor {
             }
             
             if (addMessage) {
-                addMessage(`Downloaded ${result.rowCount} rows with Reference data.`, 'success');
+                addMessage(`Downloaded ${result.rowCount} rows with Reference data or textaudio responses.`, 'success');
             }
         }
     }
