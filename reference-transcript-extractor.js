@@ -1,6 +1,7 @@
 /**
  * Reference & Transcript Extractor Module
- * Extracts Date, ParticipantID, Reference, Transcript, and Response columns from data.
+ * Extracts Date, ExperimentCode, ParticipantID, QuestionTitle, Reference,
+ * Transcript, and Response columns from data.
  * Includes rows where Reference has data, plus textaudio rows without a
  * Reference (typed answers), whose Response is included.
  */
@@ -18,7 +19,8 @@ class ReferenceTranscriptExtractor {
     }
 
     /**
-     * Extract Date, ParticipantID, Reference, Transcript, and Response columns from data
+     * Extract Date, ExperimentCode, ParticipantID, QuestionTitle, Reference,
+     * Transcript, and Response columns from data
      * @param {Array} data - Array of row objects to extract from
      * @param {Function} addMessage - Function to display messages (message, type)
      * @returns {Object|null} - Object with csvContent and rowCount if successful, null otherwise
@@ -44,7 +46,7 @@ class ReferenceTranscriptExtractor {
             return null;
         }
 
-        const columns = ['Date', 'ParticipantID', 'Reference', 'Transcript', 'Response'];
+        const columns = ['Date', 'ExperimentCode', 'ParticipantID', 'QuestionTitle', 'Reference', 'Transcript', 'Response'];
         let csvContent = columns.join(',') + '\n';
 
         filteredData.forEach(row => {
