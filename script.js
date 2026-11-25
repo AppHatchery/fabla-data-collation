@@ -122,15 +122,39 @@ class CSVCollator {
             icons.push(`<span class="voice-entry">✏️${dayDetails.text}</span>`);
         }
 
-        const titleLines = [`${dayDetails.audio} audio, ${dayDetails.text} text`];
-        dayDetails.flagged.forEach(entry => {
-            titleLines.push(`Flagged: "${this.truncateText(entry.response, 60)}" (${entry.reason})`);
-        });
-
         const className = dayDetails.flagged.length > 0
             ? 'daily-count has-entries voice-diary-cell has-flagged'
             : 'daily-count has-entries voice-diary-cell';
-        return `<td class="${className}" title="${this.escapeAttribute(titleLines.join('\n'))}">${icons.join(' ')}</td>`;
+        return `<td class="${className}" title="${this.escapeAttribute(this.voiceDiaryCellTitle(dayDetails, date))}">${icons.join(' ')}</td>`;
+    }
+
+    // Submission time for hover text; includes the calendar date when it differs from the study day (before-4 AM entries)
+    formatVoiceEntryTime(submittedAt, studyDate) {
+        const m = String(submittedAt || '').match(/^(\d{4}-\d{2}-\d{2}) (\d{1,2}:\d{2})/);
+        if (!m) return submittedAt || '';
+        return m[1] === studyDate ? m[2] : `${this.formatDateForTable(m[1]).dateStr} ${m[2]}`;
+    }
+
+    // Hover text: each entry's transcript (audio) or typed response (text), in submission order
+    voiceDiaryCellTitle(dayDetails, studyDate) {
+        const lines = [`${dayDetails.audio} audio, ${dayDetails.text} text`];
+        dayDetails.entries.forEach(entry => {
+            const icon = entry.type === 'audio' ? '🎤' : '✏️';
+            const formattedTime = this.formatVoiceEntryTime(entry.submittedAt, studyDate);
+            const time = formattedTime ? `${formattedTime} ` : '';
+            let content = this.truncateText(entry.content, 500);
+            if (!content) {
+                content = entry.type === 'audio' ? '(no transcript available)' : '(empty response)';
+            } else if (entry.type === 'text') {
+                content = `"${content}"`;
+            }
+            lines.push('');
+            lines.push(`${icon} ${time}${content}`);
+            if (entry.reason) {
+                lines.push(`⚠️ Low effort: ${entry.reason}`);
+            }
+        });
+        return lines.join('\n');
     }
 
     renderFlaggedTextCell(flagged) {
@@ -1485,7 +1509,7 @@ class CSVCollator {
         if (audioSummaryData && audioSummaryData.length > 0) {
             tableHTML += '<div style="margin-top: 24px; padding: 12px 16px; background: #f8fafc; border-top: 2px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;"><h4 style="margin: 0; font-size: 1rem; color: #1e293b;">Voice Diaries</h4>';
             if (voiceDiaryDetails) {
-                tableHTML += '<p class="voice-diary-legend">🎤 audio recording &nbsp;·&nbsp; ✏️ typed text &nbsp;·&nbsp; <span class="voice-diary-legend-flag">amber</span> = short or low-effort text flagged for compensation review (hover a cell for details)</p>';
+                tableHTML += '<p class="voice-diary-legend">🎤 audio recording &nbsp;·&nbsp; ✏️ typed text &nbsp;·&nbsp; <span class="voice-diary-legend-flag">amber</span> = short or low-effort text flagged for compensation review &nbsp;·&nbsp; hover a day to read its transcripts and typed responses</p>';
             }
             tableHTML += '</div>';
             tableHTML += '<table><thead><tr>';

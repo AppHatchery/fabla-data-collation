@@ -26,7 +26,7 @@ A browser-based tool for aggregating Fabla research data. Upload multiple CSV fi
 - **🎯 End Time Analysis**: Focuses on end_time entries for accurate participation tracking
 - **💰 Incentive Tracking**: Displays the most recent incentive value for each participant from Incentives entries
 - **🧹 Automatic Duplicate Cleaning**: Upload-glitch duplicates are removed before analysis, with a notice and a collapsible drawer listing every removed row
-- **🎤 Voice Diary Entry Types**: In Adherence Monitoring, each voice diary day shows 🎤 for audio entries (row has a Reference file) and ✏️ for typed text entries
+- **🎤 Voice Diary Entry Types**: In Adherence Monitoring, each voice diary day shows 🎤 for audio entries (row has a Reference file) and ✏️ for typed text entries; hover a day to read each entry's transcript or typed response
 - **⚠️ Low-Effort Text Flags**: Short or low-effort typed entries (e.g. "NA", ".") are highlighted in amber and counted in a Flagged Text column for compensation review; hover for the responses
 
 ### Duplicate Cleaning

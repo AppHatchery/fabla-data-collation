@@ -341,7 +341,8 @@ class ParticipationAnalyzer {
                     dailyAudioCounts[pid][date] = (dailyAudioCounts[pid][date] || 0) + 1;
                 });
 
-                // Per participant and day: audio vs typed entries, and typed entries that look low-effort
+                // Per participant and day: each entry's content (transcript or typed text),
+                // audio vs typed counts, and typed entries that look low-effort
                 voiceDiaryDetails = {};
                 processedAudioRows.forEach(row => {
                     const pid = row.ParticipantID;
@@ -351,19 +352,30 @@ class ParticipationAnalyzer {
                         voiceDiaryDetails[pid] = {};
                     }
                     if (!voiceDiaryDetails[pid][date]) {
-                        voiceDiaryDetails[pid][date] = { audio: 0, text: 0, flagged: [] };
+                        voiceDiaryDetails[pid][date] = { audio: 0, text: 0, flagged: [], entries: [] };
                     }
                     const day = voiceDiaryDetails[pid][date];
+                    const type = VoiceEntry.entryType(row);
+                    const submittedAt = VoiceEntry.submittedAt(row);
 
-                    if (VoiceEntry.entryType(row) === 'audio') {
+                    if (type === 'audio') {
                         day.audio += 1;
+                        day.entries.push({ type, submittedAt, content: VoiceEntry.isBlank(row.Transcript) ? '' : String(row.Transcript), reason: null });
                         return;
                     }
                     day.text += 1;
+                    const response = VoiceEntry.isBlank(row.Response) ? '' : String(row.Response);
                     const reason = VoiceEntry.lowEffortReason(row.Response);
+                    day.entries.push({ type, submittedAt, content: response, reason });
                     if (reason) {
-                        day.flagged.push({ response: String(row.Response || ''), reason });
+                        day.flagged.push({ response, reason });
                     }
+                });
+
+                Object.values(voiceDiaryDetails).forEach(days => {
+                    Object.values(days).forEach(day => {
+                        day.entries.sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
+                    });
                 });
                 
                 // Create audio summary data
