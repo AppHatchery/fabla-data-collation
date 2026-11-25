@@ -307,6 +307,7 @@ class ParticipationAnalyzer {
         );
         
         let audioSummaryData = null;
+        let voiceDiaryDetails = null;
         
         if (audioRows.length > 0) {
             console.log(`Found audio/textaudio entries. Generating second summary...`);
@@ -339,6 +340,31 @@ class ParticipationAnalyzer {
                     }
                     dailyAudioCounts[pid][date] = (dailyAudioCounts[pid][date] || 0) + 1;
                 });
+
+                // Per participant and day: audio vs typed entries, and typed entries that look low-effort
+                voiceDiaryDetails = {};
+                processedAudioRows.forEach(row => {
+                    const pid = row.ParticipantID;
+                    const date = row.AudioDate;
+
+                    if (!voiceDiaryDetails[pid]) {
+                        voiceDiaryDetails[pid] = {};
+                    }
+                    if (!voiceDiaryDetails[pid][date]) {
+                        voiceDiaryDetails[pid][date] = { audio: 0, text: 0, flagged: [] };
+                    }
+                    const day = voiceDiaryDetails[pid][date];
+
+                    if (VoiceEntry.entryType(row) === 'audio') {
+                        day.audio += 1;
+                        return;
+                    }
+                    day.text += 1;
+                    const reason = VoiceEntry.lowEffortReason(row.Response);
+                    if (reason) {
+                        day.flagged.push({ response: String(row.Response || ''), reason });
+                    }
+                });
                 
                 // Create audio summary data
                 audioSummaryData = [];
@@ -363,6 +389,7 @@ class ParticipationAnalyzer {
         return {
             summary: summaryData,
             audioSummary: audioSummaryData,
+            voiceDiaryDetails: voiceDiaryDetails,
             incentiveSummary: incentiveSummaryData,
             participantCount: participantIds.length,
             totalEntries: Object.values(totalCounts).reduce((sum, count) => sum + count, 0),

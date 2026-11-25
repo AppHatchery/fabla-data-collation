@@ -9,6 +9,7 @@ class CSVCollator {
         this.participationData = null;
         this.originalSummaryData = null; // Store original data for filtering
         this.originalAudioSummaryData = null; // Store original audio data for filtering
+        this.originalVoiceDiaryDetails = null;
         this.transcriptFiles = [];
         this.transcriptData = [];
         
@@ -17,6 +18,7 @@ class CSVCollator {
         this.analysisParticipationData = null;
         this.originalAnalysisSummaryData = null; // Store original analysis data for filtering
         this.originalAnalysisAudioSummaryData = null;
+        this.originalAnalysisVoiceDiaryDetails = null;
         this.originalAnalysisIncentiveSummaryData = null;
         this.originalIncentiveSummaryData = null;
 
@@ -104,6 +106,59 @@ class CSVCollator {
         const n = count || 0;
         const className = n > 0 ? 'daily-count has-entries' : 'daily-count';
         return `<td class="${className}">${n}</td>`;
+    }
+
+    // Voice diary day cell: 🎤 audio / ✏️ text counts, amber when a typed entry looks low-effort
+    renderVoiceDiaryCell(count, date, firstEntryDate, dayDetails) {
+        if (!dayDetails || !count || !firstEntryDate || date < firstEntryDate) {
+            return this.renderDailyCountCell(count, date, firstEntryDate);
+        }
+
+        const icons = [];
+        if (dayDetails.audio > 0) {
+            icons.push(`<span class="voice-entry">🎤${dayDetails.audio}</span>`);
+        }
+        if (dayDetails.text > 0) {
+            icons.push(`<span class="voice-entry">✏️${dayDetails.text}</span>`);
+        }
+
+        const titleLines = [`${dayDetails.audio} audio, ${dayDetails.text} text`];
+        dayDetails.flagged.forEach(entry => {
+            titleLines.push(`Flagged: "${this.truncateText(entry.response, 60)}" (${entry.reason})`);
+        });
+
+        const className = dayDetails.flagged.length > 0
+            ? 'daily-count has-entries voice-diary-cell has-flagged'
+            : 'daily-count has-entries voice-diary-cell';
+        return `<td class="${className}" title="${this.escapeAttribute(titleLines.join('\n'))}">${icons.join(' ')}</td>`;
+    }
+
+    renderFlaggedTextCell(flagged) {
+        if (flagged.length === 0) {
+            return '<td class="flagged-count">0</td>';
+        }
+        const title = flagged
+            .map(entry => `${this.formatDateForTable(entry.date).dateStr}: "${this.truncateText(entry.response, 60)}" (${entry.reason})`)
+            .join('\n');
+        return `<td class="flagged-count has-flags" title="${this.escapeAttribute(title)}">⚠️ ${flagged.length}</td>`;
+    }
+
+    summarizeVoiceDiaryDetails(participantDetails, dates) {
+        const totals = { audio: 0, text: 0, flagged: [] };
+        dates.forEach(date => {
+            const day = participantDetails[date];
+            if (!day) return;
+            totals.audio += day.audio;
+            totals.text += day.text;
+            day.flagged.forEach(entry => totals.flagged.push({ ...entry, date }));
+        });
+        totals.flagged.sort((a, b) => a.date.localeCompare(b.date));
+        return totals;
+    }
+
+    truncateText(text, maxLength) {
+        const s = String(text || '');
+        return s.length > maxLength ? `${s.slice(0, maxLength - 1)}…` : s;
     }
 
     setupEventListeners() {
@@ -907,8 +962,10 @@ class CSVCollator {
         this.participationData = null;
         this.originalSummaryData = null;
         this.originalAudioSummaryData = null;
+        this.originalVoiceDiaryDetails = null;
         this.originalIncentiveSummaryData = null;
         this.resetCalculateAdherenceState('participation');
+        this.renderDuplicateNotice('participationDuplicateNotice', null);
         
         document.getElementById('fileInput').value = '';
         document.getElementById('actionButtons').style.display = 'none';
@@ -952,6 +1009,10 @@ class CSVCollator {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    escapeAttribute(text) {
+        return this.escapeHtml(text).replace(/"/g, '&quot;');
     }
 
     buildColumnUnion(rows) {
@@ -1001,8 +1062,10 @@ class CSVCollator {
         this.clearMessages();
 
         try {
+            const cleaning = this.cleanUploadDuplicates(this.mergedData);
+
             // Process the data for participation analysis
-            this.participationData = this.participationAnalyzer.processParticipationData(this.mergedData);
+            this.participationData = this.participationAnalyzer.processParticipationData(cleaning.data);
             
             if (this.participationData.summary === null) {
                 this.addMessage(this.participationData.message, 'error');
@@ -1012,9 +1075,11 @@ class CSVCollator {
 
             // Generate statistics
             const stats = this.participationAnalyzer.generateStats(this.participationData.summary);
+            this.originalVoiceDiaryDetails = this.participationData.voiceDiaryDetails;
             
             // Display the analysis results
             this.showParticipationResults(stats, this.participationData.summary, this.participationData.audioSummary, this.participationData.incentiveSummary);
+            this.renderDuplicateNotice('participationDuplicateNotice', cleaning, 'before analysis');
             
             this.addMessage('Participation analysis completed successfully!', 'success');
             
@@ -1348,7 +1413,8 @@ class CSVCollator {
         strictDateFilter = false,
         firstEntryMap = null,
         audioFirstEntryMap = null,
-        incentiveSummary = null
+        incentiveSummary = null,
+        voiceDiaryDetails = null
     } = {}) {
         const dateRange = Object.keys(summaryData[0] || {})
             .filter(key => {
@@ -1417,10 +1483,17 @@ class CSVCollator {
         tableHTML += '</tbody></table>';
 
         if (audioSummaryData && audioSummaryData.length > 0) {
-            tableHTML += '<div style="margin-top: 24px; padding: 12px 16px; background: #f8fafc; border-top: 2px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;"><h4 style="margin: 0; font-size: 1rem; color: #1e293b;">Voice Diaries</h4></div>';
+            tableHTML += '<div style="margin-top: 24px; padding: 12px 16px; background: #f8fafc; border-top: 2px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;"><h4 style="margin: 0; font-size: 1rem; color: #1e293b;">Voice Diaries</h4>';
+            if (voiceDiaryDetails) {
+                tableHTML += '<p class="voice-diary-legend">🎤 audio recording &nbsp;·&nbsp; ✏️ typed text &nbsp;·&nbsp; <span class="voice-diary-legend-flag">amber</span> = short or low-effort text flagged for compensation review (hover a cell for details)</p>';
+            }
+            tableHTML += '</div>';
             tableHTML += '<table><thead><tr>';
             tableHTML += '<th>Participant ID</th>';
             tableHTML += '<th>Voice Diaries</th>';
+            if (voiceDiaryDetails) {
+                tableHTML += '<th title="Typed entries that look short or low-effort (e.g. &quot;NA&quot;, &quot;.&quot;). Review before compensating.">Flagged Text</th>';
+            }
 
             dateRange.forEach(date => {
                 const formatted = this.formatDateForTable(date);
@@ -1432,13 +1505,23 @@ class CSVCollator {
             audioSummaryData.forEach(participant => {
                 const firstAudioDate = resolvedAudioFirstEntryMap[String(participant.ParticipantID)]
                     || this.getFirstEntryDateFromRow(participant);
+                const participantDetails = voiceDiaryDetails ? (voiceDiaryDetails[participant.ParticipantID] || {}) : null;
 
                 tableHTML += '<tr>';
                 tableHTML += `<td class="participant-id">${participant.ParticipantID}</td>`;
-                tableHTML += `<td class="voice-diaries-count">${this.sumCountsOnDates(participant, dateRange)}</td>`;
+
+                if (participantDetails) {
+                    const totals = this.summarizeVoiceDiaryDetails(participantDetails, dateRange);
+                    tableHTML += `<td class="voice-diaries-count">${this.sumCountsOnDates(participant, dateRange)}<div class="voice-breakdown">🎤 ${totals.audio} · ✏️ ${totals.text}</div></td>`;
+                    tableHTML += this.renderFlaggedTextCell(totals.flagged);
+                } else {
+                    tableHTML += `<td class="voice-diaries-count">${this.sumCountsOnDates(participant, dateRange)}</td>`;
+                }
 
                 dateRange.forEach(date => {
-                    tableHTML += this.renderDailyCountCell(participant[date] || 0, date, firstAudioDate);
+                    tableHTML += participantDetails
+                        ? this.renderVoiceDiaryCell(participant[date] || 0, date, firstAudioDate, participantDetails[date])
+                        : this.renderDailyCountCell(participant[date] || 0, date, firstAudioDate);
                 });
 
                 tableHTML += '</tr>';
@@ -1464,7 +1547,8 @@ class CSVCollator {
             strictDateFilter: true,
             firstEntryMap,
             audioFirstEntryMap,
-            incentiveSummary: this.originalIncentiveSummaryData
+            incentiveSummary: this.originalIncentiveSummaryData,
+            voiceDiaryDetails: this.originalVoiceDiaryDetails
         });
     }
 
@@ -1655,8 +1739,10 @@ class CSVCollator {
 
     processAnalysisData(allData) {
         try {
+            const cleaning = this.cleanUploadDuplicates(allData);
+
             // Process the data for participation analysis
-            this.analysisParticipationData = this.participationAnalyzer.processParticipationData(allData);
+            this.analysisParticipationData = this.participationAnalyzer.processParticipationData(cleaning.data);
             
             if (this.analysisParticipationData.summary === null) {
                 this.addAnalysisMessage(this.analysisParticipationData.message, 'error');
@@ -1665,6 +1751,7 @@ class CSVCollator {
 
             // Generate statistics
             const stats = this.participationAnalyzer.generateStats(this.analysisParticipationData.summary);
+            this.originalAnalysisVoiceDiaryDetails = this.analysisParticipationData.voiceDiaryDetails;
             
             // Hide upload area and show success state
             const analysisUploadArea = document.getElementById('analysisUploadArea');
@@ -1672,6 +1759,7 @@ class CSVCollator {
             
             // Display the analysis results
             this.showAnalysisResults(stats, this.analysisParticipationData.summary, this.analysisParticipationData.audioSummary, this.analysisParticipationData.incentiveSummary);
+            this.renderDuplicateNotice('analysisDuplicateNotice', cleaning, 'before analysis');
             
             this.addAnalysisMessage('📊 Participation analysis completed successfully!', 'success');
             
@@ -1812,7 +1900,8 @@ class CSVCollator {
         tableDiv.innerHTML = this.buildAdherenceTableHTML(summaryData, audioSummaryData, {
             firstEntryMap,
             audioFirstEntryMap,
-            incentiveSummary: this.originalAnalysisIncentiveSummaryData
+            incentiveSummary: this.originalAnalysisIncentiveSummaryData,
+            voiceDiaryDetails: this.originalAnalysisVoiceDiaryDetails
         });
     }
 
@@ -2464,8 +2553,10 @@ class CSVCollator {
         this.analysisParticipationData = null;
         this.originalAnalysisSummaryData = null;
         this.originalAnalysisAudioSummaryData = null;
+        this.originalAnalysisVoiceDiaryDetails = null;
         this.originalAnalysisIncentiveSummaryData = null;
         this.resetCalculateAdherenceState('analysis');
+        this.renderDuplicateNotice('analysisDuplicateNotice', null);
         
         document.getElementById('analysisFileInput').value = '';
         document.getElementById('analysisActionButtons').style.display = 'none';
@@ -2640,8 +2731,6 @@ class CSVCollator {
             RespondedAt: 'RespondedAt',
             Date: 'Date'
         };
-        const keyCols = [resolved.PromptID, resolved.ParticipantID, resolved.RespondedAt];
-        const dateCol = resolved.Date;
 
         this.showCleaningLoading(true);
 
@@ -2649,72 +2738,8 @@ class CSVCollator {
             const data = this.cleaningRawData;
             const totalBefore = data.length;
 
-            // Helper to check if a value is empty/None/null
-            const isEmpty = (val) => {
-                if (val === undefined || val === null) return true;
-                const s = String(val).trim().toLowerCase();
-                return s === '' || s === 'none' || s === 'null' || s === 'undefined';
-            };
-
-            // Group rows by the composite key, but ONLY if all key column values
-            // are non-empty. Rows with any empty key value are never considered duplicates.
-            const groups = new Map();
-            const ungroupedIndices = new Set(); // rows that can't be grouped (empty key values)
-
-            data.forEach((row, index) => {
-                const keyValues = keyCols.map(col => row[col] || '');
-
-                // If any key value is empty/None, this row cannot be a duplicate
-                if (keyValues.some(v => isEmpty(v))) {
-                    ungroupedIndices.add(index);
-                    return;
-                }
-
-                const key = keyValues.join('|||');
-
-                if (!groups.has(key)) {
-                    groups.set(key, []);
-                }
-                groups.get(key).push({ row, index });
-            });
-
-            // Find duplicate groups (groups with more than one entry AND different Date values)
-            const duplicateGroups = [];
-            const removedIndices = new Set();
-
-            groups.forEach((entries, key) => {
-                if (entries.length > 1) {
-                    // Check that dates actually differ (true duplicates from failed uploads)
-                    const uniqueDates = new Set(entries.map(e => e.row[dateCol] || ''));
-                    if (uniqueDates.size <= 1) {
-                        // Same date too — these are exact duplicates, not upload-retry duplicates.
-                        // Still deduplicate them (keep first).
-                    }
-
-                    // Sort by datetime column (earliest first)
-                    entries.sort((a, b) => {
-                        const dateA = a.row[dateCol] || '';
-                        const dateB = b.row[dateCol] || '';
-                        return dateA.localeCompare(dateB);
-                    });
-
-                    // Keep the first (earliest), mark rest as removed
-                    const kept = entries[0];
-                    const removed = entries.slice(1);
-
-                    removed.forEach(r => removedIndices.add(r.index));
-
-                    duplicateGroups.push({
-                        key: key,
-                        kept: kept,
-                        removed: removed,
-                        all: entries
-                    });
-                }
-            });
-
-            // Build cleaned data - preserve original order, keep ungrouped rows and non-duplicates
-            this.cleanedData = data.filter((row, index) => !removedIndices.has(index));
+            const { cleanedData, duplicateGroups } = this.findUploadDuplicates(data, resolved);
+            this.cleanedData = cleanedData;
             this.cleaningDuplicateGroups = duplicateGroups;
 
             const totalAfter = this.cleanedData.length;
@@ -2733,6 +2758,139 @@ class CSVCollator {
         } finally {
             this.showCleaningLoading(false);
         }
+    }
+
+    // Upload-glitch duplicates share PromptID, ParticipantID and RespondedAt; the earliest upload (Date) is kept.
+    // Rows with any empty key value are never treated as duplicates.
+    findUploadDuplicates(data, resolvedColumns) {
+        const keyCols = [resolvedColumns.PromptID, resolvedColumns.ParticipantID, resolvedColumns.RespondedAt];
+        const dateCol = resolvedColumns.Date;
+
+        const groups = new Map();
+        data.forEach((row, index) => {
+            const keyValues = keyCols.map(col => row[col] || '');
+            if (keyValues.some(v => VoiceEntry.isBlank(v))) return;
+
+            const key = keyValues.join('|||');
+            if (!groups.has(key)) {
+                groups.set(key, []);
+            }
+            groups.get(key).push({ row, index });
+        });
+
+        const duplicateGroups = [];
+        const removedIndices = new Set();
+
+        groups.forEach((entries, key) => {
+            if (entries.length < 2) return;
+
+            entries.sort((a, b) => this.compareUploadDates(a.row[dateCol], b.row[dateCol]));
+
+            const kept = entries[0];
+            const removed = entries.slice(1);
+            removed.forEach(r => removedIndices.add(r.index));
+
+            duplicateGroups.push({ key, kept, removed, all: entries });
+        });
+
+        return {
+            cleanedData: data.filter((row, index) => !removedIndices.has(index)),
+            duplicateGroups,
+            removedCount: removedIndices.size
+        };
+    }
+
+    // Parsed timestamps so "M/D/YY H:MM" upload dates order correctly; ties keep file order
+    compareUploadDates(a, b) {
+        const timeA = this.participationAnalyzer.parseTimestamp(a);
+        const timeB = this.participationAnalyzer.parseTimestamp(b);
+        if (timeA !== null && timeB !== null) return timeA - timeB;
+        return String(a || '').localeCompare(String(b || ''));
+    }
+
+    // Remove upload-glitch duplicates before analysis or transcript download.
+    // Data missing the key columns is passed through unchanged with missingCols set.
+    cleanUploadDuplicates(data) {
+        const { resolvedColumns, missingCols } = this.resolveCleaningColumns(this.buildColumnUnion(data));
+        if (missingCols.length > 0) {
+            return { data, missingCols, resolvedColumns: null, duplicateGroups: [], removedCount: 0 };
+        }
+
+        const result = this.findUploadDuplicates(data, resolvedColumns);
+        return {
+            data: result.cleanedData,
+            missingCols: [],
+            resolvedColumns,
+            duplicateGroups: result.duplicateGroups,
+            removedCount: result.removedCount
+        };
+    }
+
+    // Notice that duplicates were cleaned, with a collapsible drawer listing every removed row
+    renderDuplicateNotice(containerId, cleaning, when = '') {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        if (!cleaning) {
+            container.innerHTML = '';
+            return;
+        }
+
+        const whenText = when ? ` ${when}` : '';
+
+        if (cleaning.missingCols.length > 0) {
+            container.innerHTML = `<div class="warning">Duplicate check skipped${this.escapeHtml(whenText)}: the data has no ${this.escapeHtml(cleaning.missingCols.join(' or '))} column.</div>`;
+            return;
+        }
+
+        if (cleaning.removedCount === 0) {
+            container.innerHTML = `<div class="dedup-notice"><div class="dedup-notice-text">✅ No duplicate uploads found${this.escapeHtml(whenText)}.</div></div>`;
+            return;
+        }
+
+        const cols = cleaning.resolvedColumns;
+        const groupCount = cleaning.duplicateGroups.length;
+        const removedCount = cleaning.removedCount;
+
+        let rowsHTML = '';
+        cleaning.duplicateGroups.forEach(group => {
+            group.removed.forEach(removed => {
+                const row = removed.row;
+                const response = row.Response || row.Transcript || '';
+                rowsHTML += '<tr>';
+                rowsHTML += `<td>${this.escapeHtml(row[cols.ParticipantID] || '')}</td>`;
+                rowsHTML += `<td>${this.escapeHtml(row.QuestionsType || '')}</td>`;
+                rowsHTML += `<td title="${this.escapeAttribute(row.QuestionTitle || '')}">${this.escapeHtml(this.truncateText(row.QuestionTitle, 60))}</td>`;
+                rowsHTML += `<td title="${this.escapeAttribute(response)}">${this.escapeHtml(this.truncateText(response, 60))}</td>`;
+                rowsHTML += `<td>${this.escapeHtml(row[cols.RespondedAt] || '')}</td>`;
+                rowsHTML += `<td>${this.escapeHtml(group.kept.row[cols.Date] || '')}</td>`;
+                rowsHTML += `<td>${this.escapeHtml(row[cols.Date] || '')}</td>`;
+                rowsHTML += '</tr>';
+            });
+        });
+
+        container.innerHTML = `
+            <div class="dedup-notice">
+                <div class="dedup-notice-text">🧹 Cleaned ${removedCount.toLocaleString()} duplicate row${removedCount === 1 ? '' : 's'} (${groupCount.toLocaleString()} ${groupCount === 1 ? 'entry was' : 'entries were'} uploaded more than once)${this.escapeHtml(whenText)}. The earliest upload of each entry was kept.</div>
+                <details class="dedup-drawer">
+                    <summary>Show removed rows (${removedCount.toLocaleString()})</summary>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead><tr>
+                                <th>Participant ID</th>
+                                <th>Question Type</th>
+                                <th>Question</th>
+                                <th>Response</th>
+                                <th>Responded At</th>
+                                <th>Kept Upload</th>
+                                <th>Removed Upload</th>
+                            </tr></thead>
+                            <tbody>${rowsHTML}</tbody>
+                        </table>
+                    </div>
+                </details>
+            </div>
+        `;
     }
 
     showCleaningResults(totalBefore, groupCount, removedCount, totalAfter, duplicateGroups) {
@@ -2994,6 +3152,7 @@ class CSVCollator {
         transcriptMessages.innerHTML = '';
         transcriptActionButtons.style.display = 'none';
         this.clearUploadFieldError('transcriptUploadArea');
+        this.renderDuplicateNotice('transcriptDuplicateNotice', null);
 
         try {
             this.transcriptFiles = [];
@@ -3010,14 +3169,16 @@ class CSVCollator {
                 });
             }
 
-            // Store merged data for transcript extraction
-            this.transcriptData = allData;
+            // Store deduplicated data for transcript extraction
+            const cleaning = this.cleanUploadDuplicates(allData);
+            this.transcriptData = cleaning.data;
 
             // Update file list
             this.updateTranscriptFileList();
 
             // Show success message
             this.addTranscriptMessage(`Successfully processed ${files.length} file(s) with ${allData.length} total rows.`, 'success');
+            this.renderDuplicateNotice('transcriptDuplicateNotice', cleaning, 'before transcript download');
             
             // Show action buttons
             transcriptActionButtons.style.display = 'flex';
@@ -3081,6 +3242,7 @@ class CSVCollator {
         transcriptMessages.innerHTML = '';
         transcriptActionButtons.style.display = 'none';
         this.clearUploadFieldError('transcriptUploadArea');
+        this.renderDuplicateNotice('transcriptDuplicateNotice', null);
     }
 
     addTranscriptMessage(message, type = 'info') {

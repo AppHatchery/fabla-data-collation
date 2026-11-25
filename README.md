@@ -13,7 +13,7 @@ A browser-based tool for aggregating Fabla research data. Upload multiple CSV fi
 - **🔧 ResponseID Deduplication**: Automatically removes duplicates based on ResponseID (keeps first occurrence)
 - **👁️ Data Preview**: Preview your merged data before downloading
 - **💾 Multiple Export Formats**: Download as CSV or Excel with automatic date stamping
-- **📝 Transcript Extraction**: Extract Date, ExperimentCode, ParticipantID, QuestionTitle, Reference, Transcript, and Response columns for rows with Reference data, plus textaudio rows without a Reference
+- **📝 Transcript Extraction**: Export every voice diary entry (audio rows with a Reference, plus textaudio rows typed without one) with ResponseTime, ExperimentCode, ParticipantID, QuestionTitle, Type, Reference, Response, and ReviewFlag columns
 - **🛠️ Advanced CSV Parsing**: Handles multiline fields and complex CSV structures
 
 ### Participation Analysis
@@ -25,6 +25,9 @@ A browser-based tool for aggregating Fabla research data. Upload multiple CSV fi
 - **📊 Key Metrics**: Total participants, entries, averages, most/least active participants
 - **🎯 End Time Analysis**: Focuses on end_time entries for accurate participation tracking
 - **💰 Incentive Tracking**: Displays the most recent incentive value for each participant from Incentives entries
+- **🧹 Automatic Duplicate Cleaning**: Upload-glitch duplicates are removed before analysis, with a notice and a collapsible drawer listing every removed row
+- **🎤 Voice Diary Entry Types**: In Adherence Monitoring, each voice diary day shows 🎤 for audio entries (row has a Reference file) and ✏️ for typed text entries
+- **⚠️ Low-Effort Text Flags**: Short or low-effort typed entries (e.g. "NA", ".") are highlighted in amber and counted in a Flagged Text column for compensation review; hover for the responses
 
 ### Duplicate Cleaning
 - **🧹 Upload Glitch Detection**: Automatically detects duplicate entries caused by data upload glitches
@@ -48,7 +51,12 @@ A browser-based tool for aggregating Fabla research data. Upload multiple CSV fi
 3. **Process Data**: The tool processes your files and removes duplicates automatically.
 4. **Download Results**: 
    - **Download CSV/Excel**: Download your collated and deduplicated data as CSV or Excel format with automatic date stamping (e.g., `fabla_data_2024-09-24.csv`)
-   - **Download Transcripts**: Extract and download the Date, ExperimentCode, ParticipantID, QuestionTitle, Reference, Transcript, and Response columns for rows that have Reference data, plus `textaudio` rows with no Reference (typed answers), whose Response is filled in. This creates a focused CSV file (e.g., `fabla_reference_transcript_2024-09-24.csv`) containing only relevant transcript entries.
+   - **Download Transcripts**: Upload-glitch duplicates are removed automatically first (see Duplicate Cleaning), with a notice and a collapsible drawer listing the removed rows. The CSV (e.g., `fabla_reference_transcript_2024-09-24.csv`) has one row per voice diary entry:
+     - **ResponseTime**: when the participant submitted the entry (`RespondedAt`), not the server receipt time in `Date`. Left blank if the export has no `RespondedAt`.
+     - **Type**: `audio` for rows with a Reference file, `text` for `textaudio` rows typed without one.
+     - **Reference**: the audio file; blank for text entries.
+     - **Response**: the transcript for audio entries, or what the participant typed for text entries.
+     - **ReviewFlag**: `Low effort: …` for typed entries that are empty, placeholders (e.g. "NA", "idk"), shorter than 3 characters (e.g. "."), repeated characters, or fewer than 3 words. Review these before compensating.
 
 ### Participation Analysis Tool
 
@@ -121,6 +129,7 @@ fabla-data-collation/
 ├── script.js                       # JavaScript processing logic with CSV parser and participation analysis
 ├── participation-analysis.js       # Core participation analysis logic
 ├── reference-transcript-extractor.js # Reference and transcript extraction module
+├── voice-entry.js                  # Voice diary rules: audio vs text, submission time, low-effort flags
 ├── fabla-icon.png                  # Fabla logo icon
 ├── fabla-ghost.png                 # Fabla ghost image (used as cursor)
 ├── fabla-ghost-cursor.png          # Fabla ghost cursor image

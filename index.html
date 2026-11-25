@@ -628,6 +628,61 @@
             border-left: 4px solid #28a745;
         }
 
+        .warning {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border-left: 4px solid #f59e0b;
+        }
+
+        /* Automatic duplicate cleaning notice + removed-rows drawer */
+        .dedup-notice {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-left: 4px solid #0ea5e9;
+            border-radius: 8px;
+            margin: 10px 0 24px;
+            color: #075985;
+            font-size: 0.9375rem;
+        }
+
+        .dedup-notice-text {
+            padding: 14px 16px;
+        }
+
+        .dedup-drawer {
+            border-top: 1px solid #bae6fd;
+        }
+
+        .dedup-drawer summary {
+            cursor: pointer;
+            padding: 10px 16px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: #0369a1;
+        }
+
+        .dedup-drawer summary:hover {
+            color: #0c4a6e;
+        }
+
+        .dedup-drawer .table-wrapper {
+            max-height: 360px;
+            overflow: auto;
+            background: white;
+            border-top: 1px solid #e2e8f0;
+            border-radius: 0 0 8px 8px;
+        }
+
+        .dedup-drawer th,
+        .dedup-drawer td {
+            font-size: 0.8125rem;
+            padding: 8px 12px;
+            color: #334155;
+        }
+
         /* Participation Analysis Styles */
         .participation-stats {
             display: grid;
@@ -900,6 +955,54 @@
         .participation-table .daily-count.has-entries {
             background: #dbeafe;
             color: #1e40af;
+            font-weight: 600;
+        }
+
+        /* Voice diary cells: 🎤 audio / ✏️ text counts */
+        .participation-table .voice-diary-cell {
+            white-space: nowrap;
+            cursor: default;
+        }
+
+        .participation-table .voice-entry {
+            display: inline-block;
+        }
+
+        .participation-table .daily-count.has-flagged {
+            background: #fde68a;
+            color: #92400e;
+            box-shadow: inset 0 0 0 2px #f59e0b;
+        }
+
+        .participation-table .voice-breakdown {
+            font-size: 0.75rem;
+            color: #64748b;
+            white-space: nowrap;
+        }
+
+        .participation-table .flagged-count {
+            text-align: center;
+            color: #94a3b8;
+            white-space: nowrap;
+        }
+
+        .participation-table .flagged-count.has-flags {
+            color: #b45309;
+            font-weight: 700;
+            cursor: help;
+        }
+
+        .voice-diary-legend {
+            margin: 4px 0 0;
+            font-size: 0.8125rem;
+            color: #64748b;
+        }
+
+        .voice-diary-legend-flag {
+            background: #fde68a;
+            color: #92400e;
+            padding: 0 6px;
+            border-radius: 4px;
             font-weight: 600;
         }
 
@@ -1632,7 +1735,7 @@
                         <div class="tool-icon">📝</div>
                         <div class="tool-content">
                             <div class="tool-title">Download Transcripts</div>
-                            <div class="tool-description">Extract Date, ExperimentCode, ParticipantID, QuestionTitle, Reference, Transcript, and Response columns from your data.</div>
+                            <div class="tool-description">Export every voice diary entry, audio and typed text, with the participant's submission time, one Response column, and flags for low-effort text.</div>
                         </div>
                     </button>
                     <button class="tool-button" id="cleaningTab" data-tool="cleaning">
@@ -1743,6 +1846,7 @@
             <!-- Participation Analysis Section -->
             <div class="results" id="participationResults" style="display: none;">
                 <h3>📊 Participation Analysis</h3>
+                <div id="participationDuplicateNotice"></div>
                 <div class="participation-stats" id="participationStats"></div>
                 
                 <div class="action-buttons" id="participationActionButtons">
@@ -1857,6 +1961,7 @@
 
                 <div class="results" id="analysisResults" style="display: none;">
                     <h3>📊 Participation Analysis Results</h3>
+                    <div id="analysisDuplicateNotice"></div>
                     <div class="participation-stats" id="analysisParticipationStats"></div>
                     
                     <div class="action-buttons" id="analysisActionButtons">
@@ -1942,7 +2047,7 @@
                     <div class="upload-area" id="transcriptUploadArea">
                         <div class="upload-icon">📝</div>
                         <h3>Upload CSV for Transcript Extraction</h3>
-                        <p>Upload your CSV data to extract Date, ExperimentCode, ParticipantID, QuestionTitle, Reference, Transcript, and Response columns. Rows with Reference data are included, plus textaudio rows without a Reference (with their Response).</p>
+                        <p>Upload your CSV data to export ResponseTime, ExperimentCode, ParticipantID, QuestionTitle, Type, Reference, Response, and ReviewFlag columns. Audio entries (with a Reference) use their transcript as the Response; typed textaudio entries use what the participant wrote. Duplicate uploads are removed automatically.</p>
                         <input type="file" id="transcriptFileInput" class="file-input" accept=".csv" multiple />
                     </div>
                     <div class="upload-error-message" id="transcriptUploadAreaError" hidden></div>
@@ -1956,6 +2061,7 @@
                 </div>
 
                 <div id="transcriptMessages"></div>
+                <div id="transcriptDuplicateNotice"></div>
 
                 <div class="action-buttons" id="transcriptActionButtons" style="display: none;">
                     <button class="btn" id="downloadTranscriptBtn">📝 Download Transcripts</button>
@@ -2073,6 +2179,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="voice-entry.js"></script>
     <script src="participation-analysis.js"></script>
     <script src="reference-transcript-extractor.js"></script>
     <script src="script.js"></script>
